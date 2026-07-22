@@ -61,7 +61,6 @@ final class Tracker: ObservableObject {
 
         var activeApp = "Idle"
         var activeTitle = ""
-        var activeURL: String? = nil
 
         if !nowIsIdle, let details = AXReader.frontmostDetails() {
             let name = details.app.localizedName ?? "Unknown"
@@ -70,7 +69,8 @@ final class Tracker: ObservableObject {
             } else {
                 activeApp = name
                 activeTitle = details.title
-                activeURL = lastURL // refreshed by ContentCapture, reused between captures
+                // URL is carried on `lastURL`, refreshed by ContentCapture and
+                // read directly in saveCurrentEvent().
             }
         }
 
