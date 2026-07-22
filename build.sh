@@ -39,6 +39,8 @@ swiftc \
     Sources/HelloMac/AppDelegate.swift \
     Sources/HelloMac/Config.swift \
     Sources/HelloMac/Keychain.swift \
+    Sources/HelloMac/AccountPairing.swift \
+    Sources/HelloMac/RelayClient.swift \
     Sources/HelloMac/SQLiteDB.swift \
     Sources/HelloMac/Store.swift \
     Sources/HelloMac/Embeddings.swift \

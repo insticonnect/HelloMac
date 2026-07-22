@@ -83,6 +83,7 @@ final class McpServer {
              required: ["id"])
     ]
 
+    /// HTTP transport entry point (used by the local server).
     func handle(_ req: HttpRequest) -> (String, String, Data, [String: String]) {
         let ct = "application/json; charset=utf-8"
         guard req.method == "POST" else {
@@ -91,7 +92,24 @@ final class McpServer {
         guard let msg = (try? JSONSerialization.jsonObject(with: req.body, options: [])) as? [String: Any] else {
             return ("400 Bad Request", ct, rpcError(id: nil, code: -32700, message: "parse error"), [:])
         }
+        guard let data = dispatch(msg) else {
+            return ("202 Accepted", ct, Data(), [:])   // notification, no response body
+        }
+        return ("200 OK", ct, data, [:])
+    }
 
+    /// Relay transport entry point: takes a raw JSON-RPC message and returns the
+    /// response bytes (nil for notifications). Shared dispatch with HTTP.
+    func processRPC(_ data: Data) -> Data? {
+        guard let msg = (try? JSONSerialization.jsonObject(with: data, options: [])) as? [String: Any] else {
+            return rpcError(id: nil, code: -32700, message: "parse error")
+        }
+        return dispatch(msg)
+    }
+
+    /// Single dispatch shared by both transports. Returns response bytes, or
+    /// nil for notifications (which have no reply).
+    private func dispatch(_ msg: [String: Any]) -> Data? {
         let id = msg["id"]
         let method = msg["method"] as? String ?? ""
         let params = msg["params"] as? [String: Any] ?? [:]
@@ -105,16 +123,16 @@ final class McpServer {
                 "serverInfo": ["name": "hellomac", "version": "1.0"],
                 "instructions": Self.playbook
             ]
-            return ("200 OK", ct, rpcResult(id: id, result: result), [:])
+            return rpcResult(id: id, result: result)
 
         case "notifications/initialized", "notifications/cancelled":
-            return ("202 Accepted", ct, Data(), [:])
+            return nil
 
         case "ping":
-            return ("200 OK", ct, rpcResult(id: id, result: [:] as [String: Any]), [:])
+            return rpcResult(id: id, result: [:] as [String: Any])
 
         case "tools/list":
-            return ("200 OK", ct, rpcResult(id: id, result: ["tools": Self.toolDefs]), [:])
+            return rpcResult(id: id, result: ["tools": Self.toolDefs])
 
         case "tools/call":
             let name = params["name"] as? String ?? ""
@@ -124,10 +142,10 @@ final class McpServer {
                 "content": [["type": "text", "text": text]],
                 "isError": false
             ]
-            return ("200 OK", ct, rpcResult(id: id, result: result), [:])
+            return rpcResult(id: id, result: result)
 
         default:
-            return ("200 OK", ct, rpcError(id: id, code: -32601, message: "method not found: \(method)"), [:])
+            return rpcError(id: id, code: -32601, message: "method not found: \(method)")
         }
     }
 

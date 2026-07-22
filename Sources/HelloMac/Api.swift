@@ -39,6 +39,8 @@ final class Api {
                 "turbo_embeddings": Config.shared.turboEmbeddings,
                 "openai_key_set": (Keychain.get("openai_api_key")?.isEmpty == false),
                 "excluded_apps": Config.shared.excludedApps.sorted(),
+                "account_paired": AccountPairing.shared.isPaired,
+                "relay_enabled": Config.shared.relayEnabled,
                 "port": Int(Config.shared.port),
                 "token": store.apiToken,
                 "counts": counts,
@@ -166,6 +168,15 @@ final class Api {
                 Keychain.set("openai_api_key", k.trimmingCharacters(in: .whitespaces))
             }
             Config.shared.save()
+            return ("200 OK", ct, Api.json(["ok": true]), [:])
+
+        case ("POST", "/api/account/connect"):
+            // Opens the browser to mitthuai.com sign-in and polls for the token.
+            AccountPairing.shared.begin()
+            return ("200 OK", ct, Api.json(["ok": true, "pairing_url": Config.shared.pairingURL]), [:])
+
+        case ("POST", "/api/account/disconnect"):
+            AccountPairing.shared.signOut()
             return ("200 OK", ct, Api.json(["ok": true]), [:])
 
         case ("POST", "/api/purge"):

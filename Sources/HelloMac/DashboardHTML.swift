@@ -216,7 +216,13 @@ enum DashboardHTML {
     <div class="row" style="margin-top:10px"><button class="btn" onclick="saveSettings()">Save</button></div>
   </div>
   <div class="section">
-    <h2>Connect AI clients (MCP)</h2>
+    <h2>Claude.ai web access (mitthuai account)</h2>
+    <p class="hint" style="margin-bottom:8px">Sign in with your mitthuai account to use HelloMac from Claude on the web. Login happens on mitthuai.com (Google Sign-In, identity only — we never read your email). Your memory stays on this Mac; the account only lets Claude reach it through a secure tunnel.</p>
+    <p class="hint" style="margin-bottom:8px">Status: <b id="acct-status">…</b></p>
+    <div class="row"><button class="btn" id="acct-btn" onclick="toggleAccount()">Connect account</button></div>
+  </div>
+  <div class="section">
+    <h2>Connect AI clients (MCP) — local</h2>
     <p class="hint" style="margin-bottom:8px">Claude Code (terminal):</p>
     <code class="inline" id="mcp-code">…</code>
     <p class="hint" style="margin-top:12px;margin-bottom:8px">Claude Desktop — add to <code class="inline">claude_desktop_config.json</code>:</p>
@@ -474,6 +480,9 @@ async function loadSettings() {
   const mcp = 'claude mcp add --transport http hellomac http://localhost:' + s.port + '/mcp --header "Authorization: Bearer ' + s.token + '"';
   document.getElementById('mcp-code').textContent = mcp;
   document.getElementById('mcp-desktop').textContent = JSON.stringify({mcpServers:{hellomac:{command:'npx',args:['mcp-remote','http://localhost:' + s.port + '/mcp','--header','Authorization: Bearer ' + s.token]}}});
+  const paired = s.account_paired;
+  document.getElementById('acct-status').textContent = paired ? 'connected — Claude.ai web can reach this Mac' : 'not connected';
+  document.getElementById('acct-btn').textContent = paired ? 'Disconnect account' : 'Connect account';
   const c = s.counts;
   document.getElementById('data-counts').textContent =
     c.events + ' events · ' + c.chunks + ' text chunks (' + c.embedded + ' embedded) · ' +
@@ -497,6 +506,18 @@ async function saveSettings() {
   document.getElementById('set-openai').value = '';
   updateDot(body.paused);
   loadSettings();
+}
+
+async function toggleAccount() {
+  const s = await api('/api/status');
+  if (s.account_paired) {
+    if (!confirm('Disconnect this Mac from your mitthuai account? Claude.ai web will no longer reach it.')) return;
+    await api('/api/account/disconnect', {method:'POST'});
+  } else {
+    await api('/api/account/connect', {method:'POST'});
+    alert('Opening mitthuai.com to sign in. After you finish, this Mac connects automatically within a minute.');
+  }
+  setTimeout(loadSettings, 1500);
 }
 
 async function purge() {

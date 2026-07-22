@@ -16,6 +16,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var capture: ContentCapture!
     var scheduler: ReminderScheduler!
     var httpServer: HttpServer!
+    var relay: RelayClient!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Ask for Accessibility permission (shows the System Settings prompt).
@@ -38,11 +39,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         scheduler = ReminderScheduler(store: store)
         httpServer = HttpServer(store: store)
+        relay = RelayClient(store: store)
+
+        // Restart the relay tunnel whenever the account gets (re)paired.
+        AccountPairing.shared.onPaired = { [weak self] in
+            self?.relay.stop()
+            self?.relay.start()
+        }
 
         tracker.start()
         capture.start()
         scheduler.start()
         httpServer.start()
+        relay.start()   // no-op unless an account is paired
 
         setupMenuBar()
         print("HelloMac: running. Dashboard: \(httpServer.dashboardURL)")
@@ -53,6 +62,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         capture?.stop()
         scheduler?.stop()
         httpServer?.stop()
+        relay?.stop()
     }
 
     private func setupMenuBar() {
