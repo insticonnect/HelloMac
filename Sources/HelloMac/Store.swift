@@ -311,7 +311,9 @@ final class Store {
                 c["ts_end"] = ev.double("ts_end")
                 c["duration"] = c.double("duration") + ev.double("duration")
                 let title = ev.str("title")
-                if !title.isEmpty { c["title"] = title }
+                // Keep the shown category aligned with the shown title, so the
+                // inline chip highlight reflects the title you'd actually tag.
+                if !title.isEmpty { c["title"] = title; c["category"] = ev.str("category") }
                 var titles = c["titles"] as? [String] ?? []
                 if !title.isEmpty && !titles.contains(title) && titles.count < 8 { titles.append(title) }
                 c["titles"] = titles
