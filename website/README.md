@@ -2,78 +2,59 @@
 
 The marketing site for **mitthuai / HelloMac** — *your Mac's memory, answerable by Claude.*
 
-Built with **React + Vite**. Fully responsive (phone / tablet / desktop), with a greenish
-parrot theme and a persistent **dark / light** toggle that also respects the visitor's OS
-preference. No CSS framework — the design system is hand-written CSS variables.
+**One self-contained HTML file. No build step, no framework, no dependencies.**
+It works the instant you double-click it, and deploys to Vercel with zero configuration.
+Greenish parrot theme, **light + dark** mode (toggle in the header, also follows your OS),
+fully responsive on phone / tablet / desktop.
 
-## Tech
-
-- **React 18** (function components + hooks)
-- **Vite 5** for dev server and production build
-- Plain CSS (`src/index.css`) with `[data-theme]` light/dark tokens
-- Zero UI dependencies beyond React
-
-## Project structure
+## Files
 
 ```
 website/
-├── index.html               # Vite entry + no-flash theme bootstrap
-├── package.json
-├── vite.config.js
-├── vercel.json              # caching + security headers
-├── public/
-│   └── parrot.svg           # Mitthu the parrot — favicon + mascot image
-└── src/
-    ├── main.jsx             # React entry
-    ├── App.jsx              # page composition
-    ├── index.css            # theme tokens, layout, responsive rules
-    ├── hooks/
-    │   ├── useTheme.js       # dark/light state → <html data-theme> + localStorage
-    │   └── useReveal.js      # IntersectionObserver scroll-reveal
-    └── components/
-        ├── Header.jsx  Hero.jsx  Strip.jsx  Features.jsx
-        ├── HowItWorks.jsx  ClaudeSection.jsx  Privacy.jsx
-        ├── CTA.jsx  Footer.jsx  ParrotMark.jsx
+├── index.html      # the whole site — HTML + CSS + JS + parrot art, all inline
+├── parrot.svg      # favicon
+├── vercel.json     # clean URLs + security headers
+└── README.md
 ```
 
-## Develop
+## Preview
+
+Just **double-click `index.html`** — it opens in your browser and works immediately.
+
+Or serve the folder:
 
 ```bash
 cd website
-npm install
-npm run dev       # http://localhost:5173
-```
-
-## Build
-
-```bash
-npm run build     # outputs to dist/
-npm run preview   # serve the production build locally
+python3 -m http.server 5173     # then open http://localhost:5173
 ```
 
 ## Deploy on Vercel
 
-Vercel auto-detects Vite — no manual settings needed.
+Because it's plain static files, there's nothing to build.
 
-### Option A — Vercel dashboard (easiest)
+### Option A — Vercel dashboard
 1. Import the repo at <https://vercel.com/new>.
 2. Set **Root Directory** to `website`.
-3. Framework preset is detected as **Vite** automatically
-   (Build command `npm run build`, Output directory `dist`).
-4. **Deploy.**
+3. Framework preset: **Other**. Leave the build command and output directory **empty**.
+4. **Deploy.** Done.
 
 ### Option B — Vercel CLI
 ```bash
 npm i -g vercel
 cd website
-vercel        # preview
-vercel --prod # production
+vercel --prod
 ```
+
+### Option C — drag & drop
+Zip the `website` folder (or just its contents) and drop it onto
+<https://vercel.com/new> — it deploys as a static site.
 
 ## Customising
 
-- **Colors / theme** — every color is a CSS variable at the top of `src/index.css`
-  (`--g-400`, `--brand`, …), split into `[data-theme="dark"]` and `[data-theme="light"]` blocks.
-- **Logo** — swap `public/parrot.svg` (favicon + mascot) and `src/components/ParrotMark.jsx` (inline header logo).
-- **Copy / sections** — each section is its own component in `src/components/`.
+Everything lives in `index.html`:
+
+- **Colors / theme** — the CSS variables at the top of the `<style>` block
+  (`--g-400`, `--brand`, …), split into `[data-theme="dark"]` and `[data-theme="light"]`.
+- **Logo / mascot** — the `<symbol id="parrot">` near the top of `<body>` (and `parrot.svg` for the favicon).
+- **Copy / sections** — the HTML in `<main>`.
 - **Download link** — point the "Download for macOS" buttons at your release URL.
