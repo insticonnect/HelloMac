@@ -221,6 +221,56 @@ final class Store {
         return db.query("SELECT COUNT(*) AS n FROM events WHERE ts_start >= ? AND ts_start < ?", [s, e]).first?.int("n") ?? 0
     }
 
+    /// Multi-day report for the Trends view: per-day active/idle/focus/multitask,
+    /// period totals, the preceding-period totals (for the "vs last period"
+    /// deltas), and category totals across the whole range.
+    func report(days: Int) -> [String: Any] {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let fmt = DateFormatter()
+        fmt.dateFormat = "yyyy-MM-dd"
+        fmt.timeZone = .current
+
+        var daily: [[String: Any]] = []
+        var tActive = 0.0, tIdle = 0.0, tFocus = 0.0, tMulti = 0.0
+        var catTotals: [String: Double] = [:]
+
+        for i in stride(from: days - 1, through: 0, by: -1) {
+            guard let d = cal.date(byAdding: .day, value: -i, to: today) else { continue }
+            let ds = fmt.string(from: d)
+            let s = statsForDate(ds)
+            let f = focusStatsForDate(ds)
+            daily.append(["date": ds, "active": s.active, "idle": s.idle,
+                          "focus": f.focus, "multitask": f.multitask])
+            tActive += s.active; tIdle += s.idle; tFocus += f.focus; tMulti += f.multitask
+            for row in categoryStatsForDate(ds) {
+                catTotals[row.str("category"), default: 0] += row.double("total")
+            }
+        }
+
+        // Preceding period of the same length, for comparison.
+        var pActive = 0.0, pIdle = 0.0, pFocus = 0.0, pMulti = 0.0
+        for i in 0..<days {
+            guard let d = cal.date(byAdding: .day, value: -(days + i), to: today) else { continue }
+            let ds = fmt.string(from: d)
+            let s = statsForDate(ds)
+            let f = focusStatsForDate(ds)
+            pActive += s.active; pIdle += s.idle; pFocus += f.focus; pMulti += f.multitask
+        }
+
+        let categories = catTotals
+            .map { ["category": $0.key, "total": $0.value] as [String: Any] }
+            .sorted { ($0["total"] as? Double ?? 0) > ($1["total"] as? Double ?? 0) }
+
+        return [
+            "days": days,
+            "daily": daily,
+            "totals": ["active": tActive, "idle": tIdle, "focus": tFocus, "multitask": tMulti],
+            "prior": ["active": pActive, "idle": pIdle, "focus": pFocus, "multitask": pMulti],
+            "categories": categories
+        ]
+    }
+
     // MARK: - Settings / token
 
     func setting(_ key: String) -> String? {

@@ -99,6 +99,10 @@ final class Api {
             store.categorizeTitle(app: app, title: title, category: category)
             return ("200 OK", ct, Api.json(["ok": true]), [:])
 
+        case ("GET", "/api/report"):
+            let days = min(max(req.query["days"].flatMap(Int.init) ?? 7, 1), 366)
+            return ("200 OK", ct, Api.json(store.report(days: days)), [:])
+
         case ("GET", "/api/search"):
             let q = req.query["q"] ?? ""
             guard !q.isEmpty else {

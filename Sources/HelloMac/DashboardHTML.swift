@@ -78,6 +78,12 @@ enum DashboardHTML {
   code.inline { background: var(--panel2); padding: 2px 7px; border-radius: 6px; font: 12px ui-monospace, Menlo, monospace; word-break: break-all; }
   .empty { color: var(--dim); padding: 18px 0; text-align: center; }
   .hidden { display: none; }
+  select { background: var(--panel2); border: 1px solid var(--line); color: var(--text); border-radius: 10px; padding: 10px 14px; font: inherit; font-weight: 600; cursor: pointer; }
+  select:focus { outline: none; border-color: var(--accent); }
+  .chartbox { width: 100%; overflow-x: auto; }
+  .chartbox svg { display: block; min-width: 320px; }
+  .chartlegend { display: flex; gap: 18px; margin-bottom: 10px; font-size: 12px; color: var(--dim); }
+  .chartlegend i.sw { display: inline-block; width: 11px; height: 11px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
   .cols2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 18px; }
   .cols2 .section { margin-bottom: 0; }
   .donut-wrap { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; justify-content: center; }
@@ -107,6 +113,7 @@ enum DashboardHTML {
   <h1>Hello<span>Mac</span></h1>
   <nav>
     <button id="tab-today" class="active" onclick="show('today')">Today</button>
+    <button id="tab-trends" onclick="show('trends')">Trends</button>
     <button id="tab-search" onclick="show('search')">Search</button>
     <button id="tab-brain" onclick="show('brain')">Brain</button>
     <button id="tab-rules" onclick="show('rules')">Rules</button>
@@ -141,6 +148,33 @@ enum DashboardHTML {
   <div class="section"><h2>Timeline</h2>
     <p class="hint" style="margin-bottom:8px">Tap a category chip on any row to teach HelloMac — it re-tags that title everywhere, including activity within ±10 min.</p>
     <div id="timeline"><div class="empty">no activity logged for this day</div></div>
+  </div>
+</div>
+
+<div id="view-trends" class="hidden">
+  <div class="row" style="margin-bottom:16px">
+    <select id="range" onchange="loadTrends()">
+      <option value="7">This week</option>
+      <option value="30">This month</option>
+      <option value="90">Last 3 months</option>
+    </select>
+  </div>
+  <div class="grid">
+    <div class="card"><div class="k" id="t-active-k">Active time</div><div class="v" id="t-active">–</div><div class="hint" id="t-active-d">&nbsp;</div></div>
+    <div class="card"><div class="k" id="t-focus-k">Focus score</div><div class="v" id="t-focus" style="color:var(--accent2)">–</div><div class="hint" id="t-focus-d">&nbsp;</div></div>
+    <div class="card"><div class="k" id="t-idle-k">Idle time</div><div class="v" id="t-idle">–</div><div class="hint" id="t-idle-d">&nbsp;</div></div>
+  </div>
+  <div class="cols2">
+    <div class="section"><h2>Focus vs multitasking trend</h2><div id="chart-line" class="chartbox"><div class="empty">no data</div></div></div>
+    <div class="section"><h2>Daily activity pattern</h2>
+      <div class="chartlegend"><span><i class="sw" style="background:#5b8def"></i>Active (min)</span><span><i class="sw" style="background:#4a4f5e"></i>Away (min)</span></div>
+      <div id="chart-bars" class="chartbox"><div class="empty">no data</div></div>
+    </div>
+  </div>
+  <div class="section"><h2>Category summary</h2>
+    <div class="donut-wrap"><svg id="donut2" viewBox="0 0 200 200" width="200" height="200"></svg>
+      <div id="donut-legend2" class="legend"></div>
+    </div>
   </div>
 </div>
 
@@ -265,19 +299,20 @@ function catColor(c, i) { return CAT_COLORS[c] || PALETTE[(i||0) % PALETTE.lengt
 let CATEGORIES = ['Study','Entertainment','Work','Other'];
 
 function show(tab) {
-  ['today','search','brain','rules','settings'].forEach(t => {
+  ['today','trends','search','brain','rules','settings'].forEach(t => {
     document.getElementById('view-' + t).classList.toggle('hidden', t !== tab);
     document.getElementById('tab-' + t).classList.toggle('active', t === tab);
   });
   if (tab === 'today') loadToday();
+  if (tab === 'trends') loadTrends();
   if (tab === 'brain') loadBrain();
   if (tab === 'rules') loadRules();
   if (tab === 'settings') loadSettings();
 }
 
-function renderDonut(cats) {
-  const svg = document.getElementById('donut');
-  const legend = document.getElementById('donut-legend');
+function renderDonut(cats, svgId, legendId) {
+  const svg = document.getElementById(svgId || 'donut');
+  const legend = document.getElementById(legendId || 'donut-legend');
   // Accept either [{category,total}] (from the API) or {name: seconds}.
   let pairs;
   if (Array.isArray(cats)) {
@@ -405,6 +440,81 @@ async function loadDigest() {
   const d = await api('/api/digest?date=' + (el.value || todayStr()));
   document.getElementById('digest-text').textContent = d.text;
   document.getElementById('digest-box').classList.remove('hidden');
+}
+
+function deltaDur(s) { return (s >= 0 ? '+' : '-') + fmtDur(Math.abs(s)); }
+
+async function loadTrends() {
+  const days = parseInt(document.getElementById('range').value) || 7;
+  const label = days <= 7 ? 'Weekly' : (days <= 31 ? 'Monthly' : '3-month');
+  document.getElementById('t-active-k').textContent = label + ' active time';
+  document.getElementById('t-focus-k').textContent = label + ' focus score';
+  document.getElementById('t-idle-k').textContent = label + ' idle time';
+  let r;
+  try { r = await api('/api/report?days=' + days); } catch(e) { return; }
+  const T = r.totals, P = r.prior;
+  document.getElementById('t-active').textContent = fmtDur(T.active);
+  document.getElementById('t-idle').textContent = fmtDur(T.idle);
+  const fs = (T.focus + T.multitask) > 0 ? Math.round(100 * T.focus / (T.focus + T.multitask)) : 0;
+  const pfs = (P.focus + P.multitask) > 0 ? Math.round(100 * P.focus / (P.focus + P.multitask)) : 0;
+  document.getElementById('t-focus').textContent = fs + '%';
+  document.getElementById('t-active-d').textContent = deltaDur(T.active - P.active) + ' vs last period';
+  document.getElementById('t-idle-d').textContent = deltaDur(T.idle - P.idle) + ' vs last period';
+  document.getElementById('t-focus-d').textContent = ((fs - pfs) >= 0 ? '+' : '') + (fs - pfs) + '% vs last period';
+  document.getElementById('chart-line').innerHTML = svgLine(r.daily);
+  document.getElementById('chart-bars').innerHTML = svgBars(r.daily);
+  renderDonut(r.categories, 'donut2', 'donut-legend2');
+}
+
+function svgLine(daily) {
+  const W = 600, H = 200, pL = 30, pR = 12, pT = 12, pB = 24, n = daily.length;
+  if (!n) return '<div class="empty">no data</div>';
+  const xOf = (i) => pL + (n <= 1 ? (W - pL - pR) / 2 : (W - pL - pR) * i / (n - 1));
+  const yOf = (pct) => pT + (H - pT - pB) * (1 - pct / 100);
+  let grid = '';
+  [0, 25, 50, 75, 100].forEach(gy => {
+    const y = yOf(gy);
+    grid += '<line x1="' + pL + '" y1="' + y + '" x2="' + (W - pR) + '" y2="' + y + '" stroke="#262a36"/>' +
+            '<text x="' + (pL - 6) + '" y="' + (y + 3) + '" fill="#8a90a3" font-size="9" text-anchor="end">' + gy + '</text>';
+  });
+  const pts = daily.map((d, i) => {
+    const tot = d.focus + d.multitask;
+    const pct = tot > 0 ? 100 * d.focus / tot : 0;
+    return [xOf(i), yOf(pct)];
+  });
+  const poly = pts.map(p => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ');
+  const dots = pts.map(p => '<circle cx="' + p[0].toFixed(1) + '" cy="' + p[1].toFixed(1) + '" r="3" fill="#4fd1a5"/>').join('');
+  const step = Math.ceil(n / 7);
+  const xl = daily.map((d, i) => i % step === 0
+    ? '<text x="' + xOf(i).toFixed(1) + '" y="' + (H - 8) + '" fill="#8a90a3" font-size="9" text-anchor="middle">' + d.date.slice(5) + '</text>' : '').join('');
+  return '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%">' + grid +
+         '<polyline points="' + poly + '" fill="none" stroke="#4fd1a5" stroke-width="2"/>' + dots + xl + '</svg>';
+}
+
+function svgBars(daily) {
+  const W = 600, H = 220, pL = 34, pR = 12, pT = 12, pB = 24, n = daily.length;
+  if (!n) return '<div class="empty">no data</div>';
+  const maxMin = Math.max(1, ...daily.map(d => Math.max(d.active, d.idle) / 60));
+  const band = (W - pL - pR) / n;
+  const bw = Math.max(3, Math.min(14, band / 2 - 2));
+  const hOf = (min) => (H - pT - pB) * (min / maxMin);
+  let grid = '';
+  for (let k = 0; k <= 4; k++) {
+    const v = maxMin * k / 4, y = pT + (H - pT - pB) * (1 - k / 4);
+    grid += '<line x1="' + pL + '" y1="' + y + '" x2="' + (W - pR) + '" y2="' + y + '" stroke="#262a36"/>' +
+            '<text x="' + (pL - 6) + '" y="' + (y + 3) + '" fill="#8a90a3" font-size="9" text-anchor="end">' + Math.round(v) + '</text>';
+  }
+  let bars = '';
+  daily.forEach((d, i) => {
+    const cx = pL + band * i + band / 2;
+    const ah = hOf(d.active / 60), wh = hOf(d.idle / 60);
+    bars += '<rect x="' + (cx - bw - 1).toFixed(1) + '" y="' + (H - pB - ah).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + ah.toFixed(1) + '" fill="#5b8def" rx="1"/>';
+    bars += '<rect x="' + (cx + 1).toFixed(1) + '" y="' + (H - pB - wh).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + wh.toFixed(1) + '" fill="#4a4f5e" rx="1"/>';
+  });
+  const step = Math.ceil(n / 7);
+  const xl = daily.map((d, i) => i % step === 0
+    ? '<text x="' + (pL + band * i + band / 2).toFixed(1) + '" y="' + (H - 8) + '" fill="#8a90a3" font-size="9" text-anchor="middle">' + d.date.slice(5) + '</text>' : '').join('');
+  return '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%">' + grid + bars + xl + '</svg>';
 }
 
 async function doSearch() {
