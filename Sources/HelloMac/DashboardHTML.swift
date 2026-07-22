@@ -262,7 +262,14 @@ function show(tab) {
 function renderDonut(cats) {
   const svg = document.getElementById('donut');
   const legend = document.getElementById('donut-legend');
-  const entries = Object.entries(cats).filter(([k]) => k !== 'Idle').sort((a,b) => b[1]-a[1]);
+  // Accept either [{category,total}] (from the API) or {name: seconds}.
+  let pairs;
+  if (Array.isArray(cats)) {
+    pairs = cats.map(r => [r.category || 'Other', +r.total || 0]);
+  } else {
+    pairs = Object.entries(cats).map(([k, v]) => [k, +v || 0]);
+  }
+  const entries = pairs.filter(([k]) => k !== 'Idle').sort((a,b) => b[1]-a[1]);
   const total = entries.reduce((s,[,v]) => s+v, 0);
   if (!total) { svg.innerHTML = '<circle cx="100" cy="100" r="70" fill="none" stroke="#1d2029" stroke-width="26"/>'; legend.innerHTML = '<span class="empty">no data</span>'; return; }
   const C = 2 * Math.PI * 70;
