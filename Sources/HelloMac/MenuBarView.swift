@@ -1,15 +1,27 @@
 import SwiftUI
 import AppKit
 
+/// View state for the popover. An ObservableObject instead of @State so the
+/// app builds with plain swiftc on SDKs where @State is a compiler macro.
+final class MenuBarModel: ObservableObject {
+    @Published var paused = Config.shared.paused
+    @Published var activeToday = ""
+    @Published var importantCount = 0
+}
+
 /// The popover shown from the menu bar icon.
 struct MenuBarView: View {
     @ObservedObject var tracker: Tracker
     let store: Store
     let openDashboard: () -> Void
+    @ObservedObject var model: MenuBarModel
 
-    @State private var paused = Config.shared.paused
-    @State private var activeToday = ""
-    @State private var importantCount = 0
+    init(tracker: Tracker, store: Store, openDashboard: @escaping () -> Void) {
+        self.tracker = tracker
+        self.store = store
+        self.openDashboard = openDashboard
+        self.model = MenuBarModel()
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -19,9 +31,9 @@ struct MenuBarView: View {
                 Text("HelloMac").font(.headline)
                 Spacer()
                 Circle()
-                    .fill(paused ? Color.orange : Color.green)
+                    .fill(model.paused ? Color.orange : Color.green)
                     .frame(width: 9, height: 9)
-                Text(paused ? "Paused" : "Tracking")
+                Text(model.paused ? "Paused" : "Tracking")
                     .font(.caption).foregroundColor(.secondary)
             }
 
@@ -40,13 +52,13 @@ struct MenuBarView: View {
             HStack(spacing: 18) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Active today").font(.caption2).foregroundColor(.secondary)
-                    Text(activeToday).font(.system(size: 15, weight: .bold))
+                    Text(model.activeToday).font(.system(size: 15, weight: .bold))
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Needs attention").font(.caption2).foregroundColor(.secondary)
-                    Text("\(importantCount)")
+                    Text("\(model.importantCount)")
                         .font(.system(size: 15, weight: .bold))
-                        .foregroundColor(importantCount > 0 ? .orange : .primary)
+                        .foregroundColor(model.importantCount > 0 ? .orange : .primary)
                 }
             }
 
@@ -58,8 +70,8 @@ struct MenuBarView: View {
             }
 
             Button(action: togglePause) {
-                Label(paused ? "Resume Tracking" : "Pause Tracking",
-                      systemImage: paused ? "play.fill" : "pause.fill")
+                Label(model.paused ? "Resume Tracking" : "Pause Tracking",
+                      systemImage: model.paused ? "play.fill" : "pause.fill")
                     .frame(maxWidth: .infinity)
             }
 
@@ -76,18 +88,18 @@ struct MenuBarView: View {
     private func togglePause() {
         Config.shared.paused.toggle()
         Config.shared.save()
-        paused = Config.shared.paused
+        model.paused = Config.shared.paused
     }
 
     private func refresh() {
-        paused = Config.shared.paused
+        model.paused = Config.shared.paused
         let fmt = DateFormatter()
         fmt.dateFormat = "yyyy-MM-dd"
         let stats = store.statsForDate(fmt.string(from: Date()))
-        activeToday = Digest.formatDuration(stats.active)
+        model.activeToday = Digest.formatDuration(stats.active)
         let imp = store.importantToday()
         let dueSoon = (imp["due_soon"] as? [[String: Any]])?.count ?? 0
         let revisions = (imp["revisions_today"] as? [[String: Any]])?.count ?? 0
-        importantCount = dueSoon + revisions
+        model.importantCount = dueSoon + revisions
     }
 }
