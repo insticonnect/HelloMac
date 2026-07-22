@@ -1,0 +1,137 @@
+import Foundation
+
+/// JSON REST API behind the dashboard.
+final class Api {
+    private let store: Store
+
+    init(store: Store) {
+        self.store = store
+    }
+
+    static func json(_ obj: Any) -> Data {
+        return (try? JSONSerialization.data(withJSONObject: obj, options: [])) ?? Data("{}".utf8)
+    }
+
+    private func parseBody(_ req: HttpRequest) -> [String: Any] {
+        return (try? JSONSerialization.jsonObject(with: req.body, options: [])) as? [String: Any] ?? [:]
+    }
+
+    private func today() -> String {
+        let fmt = DateFormatter()
+        fmt.dateFormat = "yyyy-MM-dd"
+        return fmt.string(from: Date())
+    }
+
+    func handle(_ req: HttpRequest) -> (String, String, Data, [String: String]) {
+        let ct = "application/json; charset=utf-8"
+
+        switch (req.method, req.path) {
+
+        case ("GET", "/api/status"):
+            let counts = store.counts()
+            let obj: [String: Any] = [
+                "paused": Config.shared.paused,
+                "capture_text": Config.shared.captureText,
+                "capture_urls": Config.shared.captureURLs,
+                "auto_revise": Config.shared.autoRevise,
+                "embeddings": Embeddings.shared.available,
+                "excluded_apps": Config.shared.excludedApps.sorted(),
+                "port": Int(Config.shared.port),
+                "token": store.apiToken,
+                "counts": counts,
+                "version": "1.0"
+            ]
+            return ("200 OK", ct, Api.json(obj), [:])
+
+        case ("GET", "/api/overview"):
+            let date = req.query["date"] ?? today()
+            let stats = store.statsForDate(date)
+            let obj: [String: Any] = [
+                "date": date,
+                "active_secs": stats.active,
+                "idle_secs": stats.idle,
+                "sessions": store.sessionsForDate(date),
+                "top_apps": store.appStatsForDate(date),
+                "categories": store.categoryStatsForDate(date)
+            ]
+            return ("200 OK", ct, Api.json(obj), [:])
+
+        case ("GET", "/api/search"):
+            let q = req.query["q"] ?? ""
+            guard !q.isEmpty else {
+                return ("400 Bad Request", ct, Api.json(["error": "missing q"]), [:])
+            }
+            let from = req.query["from"].flatMap(Double.init)
+            let to = req.query["to"].flatMap(Double.init)
+            let limit = req.query["limit"].flatMap(Int.init) ?? 20
+            let results = store.search(query: q, from: from, to: to, limit: min(limit, 50))
+            return ("200 OK", ct, Api.json(["query": q, "results": results]), [:])
+
+        case ("GET", "/api/brain"):
+            let obj: [String: Any] = [
+                "facts": store.openFacts(),
+                "reminders": store.upcomingReminders(),
+                "important": store.importantToday()
+            ]
+            return ("200 OK", ct, Api.json(obj), [:])
+
+        case ("GET", "/api/digest"):
+            let date = req.query["date"] ?? today()
+            return ("200 OK", ct, Api.json(["date": date, "text": Digest.forDate(date, store: store)]), [:])
+
+        case ("POST", "/api/fact"):
+            let body = parseBody(req)
+            let action = body["action"] as? String ?? ""
+            switch action {
+            case "create":
+                let title = body["title"] as? String ?? ""
+                guard !title.isEmpty else {
+                    return ("400 Bad Request", ct, Api.json(["error": "missing title"]), [:])
+                }
+                let due = (body["due_ts"] as? Double) ?? (body["due_ts"] as? Int).map { Double($0) }
+                let kind = body["kind"] as? String ?? "note"
+                let id = store.addFact(kind: kind, title: title,
+                                       detail: body["detail"] as? String ?? "",
+                                       dueTs: due, source: "dashboard")
+                return ("200 OK", ct, Api.json(["ok": true, "id": id ?? -1]), [:])
+            case "complete", "dismiss":
+                guard let id = body["id"] as? Int else {
+                    return ("400 Bad Request", ct, Api.json(["error": "missing id"]), [:])
+                }
+                store.setFactStatus(id: Int64(id), status: action == "complete" ? "done" : "dismissed")
+                return ("200 OK", ct, Api.json(["ok": true]), [:])
+            case "revise":
+                guard let id = body["id"] as? Int else {
+                    return ("400 Bad Request", ct, Api.json(["error": "missing id"]), [:])
+                }
+                store.addRevisionLadder(factId: Int64(id))
+                return ("200 OK", ct, Api.json(["ok": true]), [:])
+            default:
+                return ("400 Bad Request", ct, Api.json(["error": "unknown action"]), [:])
+            }
+
+        case ("POST", "/api/settings"):
+            let body = parseBody(req)
+            if let v = body["paused"] as? Bool { Config.shared.paused = v }
+            if let v = body["capture_text"] as? Bool { Config.shared.captureText = v }
+            if let v = body["capture_urls"] as? Bool { Config.shared.captureURLs = v }
+            if let v = body["auto_revise"] as? Bool { Config.shared.autoRevise = v }
+            if let v = body["excluded_apps"] as? [String] {
+                Config.shared.excludedApps = Set(v.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty })
+            }
+            Config.shared.save()
+            return ("200 OK", ct, Api.json(["ok": true]), [:])
+
+        case ("POST", "/api/purge"):
+            let body = parseBody(req)
+            guard let from = body["from"] as? Double, let to = body["to"] as? Double else {
+                return ("400 Bad Request", ct, Api.json(["error": "need from/to unix seconds"]), [:])
+            }
+            let n = store.purge(from: from, to: to)
+            return ("200 OK", ct, Api.json(["ok": true, "chunks_deleted": n]), [:])
+
+        default:
+            return ("404 Not Found", ct, Api.json(["error": "not found"]), [:])
+        }
+    }
+}

@@ -6,6 +6,27 @@ Think of it as: **Rewind-style capture + personal knowledge base + spaced-repeti
 
 ---
 
+## 0. Starting Point: Mitthu (prior work)
+
+We are not starting from zero. [Amritkumarchanchal/mitthu](https://github.com/Amritkumarchanchal/mitthu) (~3,600 lines of Swift, no Xcode project needed — plain SwiftPM-style sources + `build.sh`) already proves out the foundation:
+
+**What mitthu already does (reuse as-is or with light refactoring):**
+- Menu-bar app (`NSStatusItem` + SwiftUI popover) with Accessibility permission prompt on launch.
+- `Tracker.swift` — 1s polling loop reading frontmost app + focused window title via `AXUIElement`, idle detection (`CGEventSource.secondsSinceLastEventType`, 5-min threshold), display-sleep-prevented override (so watching a video isn't "idle"), loginwindow handling, event dedupe on change.
+- `Database.swift` — SQLite events table `(app_name, window_title, start_time, end_time, duration, is_idle, category, device)`, categorization rules with retroactive re-categorization, daily/weekly stats, focus-vs-multitasking metrics, ActivityWatch migration.
+- `HttpServer.swift` — hand-rolled HTTP server on port 5680 serving an embedded single-page dashboard + JSON API (`/api/stats`, `/api/weekly-stats`, `/api/rules`, `/api/export`), JSON export "for feeding into ChatGPT/Claude", and an Ollama/LM Studio chat integration.
+
+**What mitthu lacks — the gap this project fills:**
+1. **No content capture** — only window *titles*, not the text on screen. HelloMac adds AX-tree text extraction (+ optional OCR), which is what makes real memory/search possible.
+2. **No search at all** — no FTS, no embeddings. HelloMac adds FTS5 + sqlite-vec hybrid retrieval.
+3. **No MCP** — the "export JSON and paste into Claude" flow becomes a first-class MCP server any client plugs into.
+4. **No brain/reminders** — no fact extraction, no due dates, no spaced repetition.
+5. **Engineering debt to fix during the port:** raw `sqlite3_*` C calls with heavy copy-paste (introduce a small DB layer + migrations); a fragile hand-rolled HTTP server that binds **all interfaces** (`INADDR_ANY`), unauthenticated — must become localhost-only + token; 2,000-line file mixing server, HTML, and launch-agent logic — split it.
+
+**Port strategy:** lift `Tracker` (extend it to pull AX text), the events schema (superset it), and the menu-bar shell into Phase 0/1 — this collapses much of Phase 1's risk, since the trickiest part (reliable AX capture + idle logic) is already field-tested on your machine.
+
+---
+
 ## 1. Core Ideas
 
 1. **Capture** — passively record which app/window/site you're in and the text visible on screen, using the macOS Accessibility APIs (the same machinery VoiceOver uses for blind users — no screenshots needed for most apps).
