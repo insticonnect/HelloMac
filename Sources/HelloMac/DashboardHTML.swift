@@ -78,6 +78,27 @@ enum DashboardHTML {
   code.inline { background: var(--panel2); padding: 2px 7px; border-radius: 6px; font: 12px ui-monospace, Menlo, monospace; word-break: break-all; }
   .empty { color: var(--dim); padding: 18px 0; text-align: center; }
   .hidden { display: none; }
+  .cols2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 18px; }
+  .cols2 .section { margin-bottom: 0; }
+  .donut-wrap { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; justify-content: center; }
+  .legend { display: flex; flex-direction: column; gap: 8px; }
+  .legend .li { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+  .legend .sw { width: 12px; height: 12px; border-radius: 3px; }
+  .legend .lt { color: var(--dim); font-variant-numeric: tabular-nums; margin-left: auto; padding-left: 12px; }
+  .rule-form { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 12px; align-items: end; }
+  .rule-form label { display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--dim); margin-bottom: 5px; }
+  table.rules { width: 100%; border-collapse: collapse; }
+  table.rules th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--dim); padding: 10px 8px; border-bottom: 1px solid var(--line); }
+  table.rules td { padding: 12px 8px; border-bottom: 1px solid var(--line); }
+  table.rules tr:last-child td { border-bottom: none; }
+  table.rules .any { color: var(--dim); }
+  .chip { display: inline-block; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 20px; background: var(--panel2); color: #cdb9ff; }
+  .catpick { display: inline-flex; gap: 4px; margin-left: 8px; }
+  .catpick button { background: var(--panel2); border: 1px solid var(--line); color: var(--dim); font-size: 11px; padding: 2px 8px; border-radius: 12px; cursor: pointer; }
+  .catpick button:hover { color: var(--text); border-color: var(--accent); }
+  .catpick button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .del { color: var(--danger); background: none; border: none; cursor: pointer; font: inherit; font-weight: 600; }
+  @media (max-width: 760px) { .cols2 { grid-template-columns: 1fr; } .rule-form { grid-template-columns: 1fr 1fr; } }
   @media (max-width: 640px) { .sess .title { display: none; } .bar-row .name { width: 110px; } }
 </style>
 </head>
@@ -88,6 +109,7 @@ enum DashboardHTML {
     <button id="tab-today" class="active" onclick="show('today')">Today</button>
     <button id="tab-search" onclick="show('search')">Search</button>
     <button id="tab-brain" onclick="show('brain')">Brain</button>
+    <button id="tab-rules" onclick="show('rules')">Rules</button>
     <button id="tab-settings" onclick="show('settings')">Settings</button>
   </nav>
   <div id="statusdot"><div class="dot" id="dot"></div><span id="statustext">tracking</span></div>
@@ -102,14 +124,24 @@ enum DashboardHTML {
     <button class="btn ghost" onclick="loadDigest()">Daily review</button>
   </div>
   <div class="grid">
-    <div class="card"><div class="k">Active</div><div class="v" id="stat-active">–</div></div>
-    <div class="card"><div class="k">Idle</div><div class="v" id="stat-idle">–</div></div>
-    <div class="card"><div class="k">Sessions</div><div class="v" id="stat-sessions">–</div></div>
-    <div class="card"><div class="k">Needs attention</div><div class="v" id="stat-important">–</div></div>
+    <div class="card"><div class="k">Active screen time</div><div class="v" id="stat-active">–</div><div class="hint">Focused active screen time.</div></div>
+    <div class="card"><div class="k">Away (idle)</div><div class="v" id="stat-idle">–</div><div class="hint">Time spent away from keyboard.</div></div>
+    <div class="card"><div class="k">Focus vs multitasking</div><div class="v" id="stat-focus" style="color:var(--accent2)">–</div><div class="hint" id="stat-focus-sub">&nbsp;</div></div>
+    <div class="card"><div class="k">Tracked events</div><div class="v" id="stat-events" style="color:var(--accent)">–</div><div class="hint">Activity switches logged today.</div></div>
   </div>
   <div class="section hidden" id="digest-box"><h2>Daily review</h2><pre class="digest" id="digest-text"></pre></div>
-  <div class="section"><h2>Top apps</h2><div id="top-apps"><div class="empty">no data yet</div></div></div>
-  <div class="section"><h2>Timeline</h2><div id="timeline"><div class="empty">no activity logged for this day</div></div></div>
+  <div class="cols2">
+    <div class="section"><h2>Category distribution</h2>
+      <div class="donut-wrap"><svg id="donut" viewBox="0 0 200 200" width="200" height="200"></svg>
+        <div id="donut-legend" class="legend"></div>
+      </div>
+    </div>
+    <div class="section"><h2>Top applications</h2><div id="top-apps"><div class="empty">no data yet</div></div></div>
+  </div>
+  <div class="section"><h2>Timeline</h2>
+    <p class="hint" style="margin-bottom:8px">Tap a category chip on any row to teach HelloMac — it re-tags that title everywhere, including activity within ±10 min.</p>
+    <div id="timeline"><div class="empty">no activity logged for this day</div></div>
+  </div>
 </div>
 
 <div id="view-search" class="hidden">
@@ -138,6 +170,26 @@ enum DashboardHTML {
   </div>
   <div class="section"><h2>Open items</h2><div id="facts"><div class="empty">nothing here yet — bills and deadlines you see on screen appear automatically</div></div></div>
   <div class="section"><h2>Upcoming reminders</h2><div id="reminders"><div class="empty">no reminders scheduled</div></div></div>
+</div>
+
+<div id="view-rules" class="hidden">
+  <div class="section">
+    <h2>Create categorization rule</h2>
+    <p class="hint" style="margin-bottom:12px">Automatically tag activity. Group related study portals and videos under the same category so they count as focus, not multitasking. Leave a field blank to match anything.</p>
+    <div class="rule-form">
+      <div><label>Application name</label><input type="text" id="rule-app" placeholder="e.g. Safari"></div>
+      <div><label>Window title contains</label><input type="text" id="rule-title" placeholder="e.g. YouTube"></div>
+      <div><label>Category / topic</label>
+        <input type="text" id="rule-cat" list="cat-list" placeholder="e.g. Study">
+        <datalist id="cat-list"></datalist>
+      </div>
+      <button class="btn" onclick="addRule()">Apply rule</button>
+    </div>
+  </div>
+  <div class="section">
+    <h2>Active categorization rules</h2>
+    <div id="rules-table"><div class="empty">no rules yet</div></div>
+  </div>
 </div>
 
 <div id="view-settings" class="hidden">
@@ -191,14 +243,57 @@ function fmtDate(ts) { const d = new Date(ts*1000); return d.toISOString().slice
 function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
 function todayStr(d) { d = d || new Date(); const off = d.getTimezoneOffset(); return new Date(d.getTime() - off*60000).toISOString().slice(0,10); }
 
+const CAT_COLORS = {'Study':'#4fd1a5','Entertainment':'#7c6cff','Work':'#ffb454','Other':'#5b6274','Idle':'#3a3f4d','Uncategorized':'#5b6274'};
+const PALETTE = ['#7c6cff','#4fd1a5','#ffb454','#ff6b6b','#5b8def','#e879f9','#22d3ee','#a3e635'];
+function catColor(c, i) { return CAT_COLORS[c] || PALETTE[(i||0) % PALETTE.length]; }
+let CATEGORIES = ['Study','Entertainment','Work','Other'];
+
 function show(tab) {
-  ['today','search','brain','settings'].forEach(t => {
+  ['today','search','brain','rules','settings'].forEach(t => {
     document.getElementById('view-' + t).classList.toggle('hidden', t !== tab);
     document.getElementById('tab-' + t).classList.toggle('active', t === tab);
   });
   if (tab === 'today') loadToday();
   if (tab === 'brain') loadBrain();
+  if (tab === 'rules') loadRules();
   if (tab === 'settings') loadSettings();
+}
+
+function renderDonut(cats) {
+  const svg = document.getElementById('donut');
+  const legend = document.getElementById('donut-legend');
+  const entries = Object.entries(cats).filter(([k]) => k !== 'Idle').sort((a,b) => b[1]-a[1]);
+  const total = entries.reduce((s,[,v]) => s+v, 0);
+  if (!total) { svg.innerHTML = '<circle cx="100" cy="100" r="70" fill="none" stroke="#1d2029" stroke-width="26"/>'; legend.innerHTML = '<span class="empty">no data</span>'; return; }
+  const C = 2 * Math.PI * 70;
+  let offset = 0, paths = '';
+  entries.forEach(([name, val], i) => {
+    const frac = val/total, len = frac * C;
+    paths += '<circle cx="100" cy="100" r="70" fill="none" stroke="' + catColor(name,i) + '" stroke-width="26" ' +
+      'stroke-dasharray="' + len + ' ' + (C-len) + '" stroke-dashoffset="' + (-offset) + '" transform="rotate(-90 100 100)"></circle>';
+    offset += len;
+  });
+  svg.innerHTML = paths;
+  legend.innerHTML = entries.map(([name,val],i) =>
+    '<div class="li"><span class="sw" style="background:' + catColor(name,i) + '"></span>' +
+    esc(name) + '<span class="lt">' + fmtDur(val) + '</span></div>').join('');
+}
+
+function jsAttr(s) {
+  return (s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+}
+function catChips(app, title, current) {
+  if (!title && !app) return '';
+  const t = jsAttr(title);
+  const a = jsAttr(app);
+  return '<span class="catpick">' + CATEGORIES.map(c =>
+    '<button class="' + (c === current ? 'on' : '') + '" title="Tag as ' + c + '" ' +
+    'onclick="tagTitle(\'' + a + '\',\'' + t + '\',\'' + c + '\')">' + c + '</button>').join('') + '</span>';
+}
+
+async function tagTitle(app, title, cat) {
+  await api('/api/categorize', {method:'POST', body: JSON.stringify({app:app, title:title, category:cat})});
+  loadToday();
 }
 
 function shiftDay(n) {
@@ -217,7 +312,15 @@ async function loadToday() {
     const o = await api('/api/overview?date=' + el.value);
     document.getElementById('stat-active').textContent = fmtDur(o.active_secs);
     document.getElementById('stat-idle').textContent = fmtDur(o.idle_secs);
-    document.getElementById('stat-sessions').textContent = o.sessions.length;
+    document.getElementById('stat-events').textContent = o.event_count;
+
+    const totalFocusable = o.focus_secs + o.multitask_secs;
+    const pct = totalFocusable > 0 ? Math.round(100 * o.focus_secs / totalFocusable) : 0;
+    document.getElementById('stat-focus').textContent = pct + '%';
+    document.getElementById('stat-focus-sub').textContent =
+      'Focus: ' + fmtDur(o.focus_secs) + ' | Multitask: ' + fmtDur(o.multitask_secs);
+
+    renderDonut(o.categories || {});
 
     const apps = document.getElementById('top-apps');
     if (o.top_apps.length) {
@@ -234,14 +337,44 @@ async function loadToday() {
         '<div class="sess' + (s.is_idle ? ' idle' : '') + '">' +
         '<span class="t">' + fmtTime(s.ts_start) + '–' + fmtTime(s.ts_end) + '</span>' +
         '<span class="app">' + esc(s.app) + '</span>' +
-        '<span class="title">' + esc(s.title) + '</span>' +
+        '<span class="title">' + esc(s.title) +
+        (s.is_idle ? '' : catChips(s.app, s.title, s.category)) + '</span>' +
         '<span class="dur">' + fmtDur(s.duration) + '</span></div>').join('');
     } else tl.innerHTML = '<div class="empty">no activity logged for this day</div>';
-
-    const b = await api('/api/brain');
-    const n = (b.important.due_soon || []).length + (b.important.revisions_today || []).length;
-    document.getElementById('stat-important').textContent = n;
   } catch(e) { console.error(e); }
+}
+
+async function loadRules() {
+  const r = await api('/api/rules');
+  CATEGORIES = r.categories && r.categories.length ? r.categories : CATEGORIES;
+  document.getElementById('cat-list').innerHTML = CATEGORIES.map(c => '<option value="' + esc(c) + '">').join('');
+  const box = document.getElementById('rules-table');
+  if (!r.rules.length) { box.innerHTML = '<div class="empty">no rules yet</div>'; return; }
+  box.innerHTML = '<table class="rules"><thead><tr><th>Application</th><th>Title contains</th><th>Category / topic</th><th style="text-align:right">Action</th></tr></thead><tbody>' +
+    r.rules.map(x =>
+      '<tr><td><b>' + (x.app ? esc(x.app) : '<span class="any">Any</span>') + '</b></td>' +
+      '<td>' + (x.title_pattern ? esc(x.title_pattern) : '<span class="any">Any</span>') + '</td>' +
+      '<td><span class="chip" style="color:' + catColor(x.category) + '">' + esc(x.category) + '</span></td>' +
+      '<td style="text-align:right"><button class="del" onclick="delRule(' + x.id + ')">Delete</button></td></tr>').join('') +
+    '</tbody></table>';
+}
+
+async function addRule() {
+  const app = document.getElementById('rule-app').value.trim();
+  const title = document.getElementById('rule-title').value.trim();
+  const cat = document.getElementById('rule-cat').value.trim();
+  if (!cat || (!app && !title)) { alert('Enter a category and at least an app or title.'); return; }
+  await api('/api/rules', {method:'POST', body: JSON.stringify({app:app, title_pattern:title, category:cat})});
+  document.getElementById('rule-app').value = '';
+  document.getElementById('rule-title').value = '';
+  document.getElementById('rule-cat').value = '';
+  loadRules();
+}
+
+async function delRule(id) {
+  if (!confirm('Delete this rule? Affected activity will be re-categorized.')) return;
+  await api('/api/rules/delete', {method:'POST', body: JSON.stringify({id:id})});
+  loadRules();
 }
 
 async function loadDigest() {
@@ -354,6 +487,7 @@ function updateDot(paused) {
 }
 
 loadToday();
+api('/api/rules').then(r => { if (r.categories && r.categories.length) CATEGORIES = r.categories; }).catch(()=>{});
 api('/api/status').then(s => updateDot(s.paused)).catch(()=>{});
 setInterval(() => { if (!document.getElementById('view-today').classList.contains('hidden')) loadToday(); }, 60000);
 </script>

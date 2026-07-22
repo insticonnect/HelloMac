@@ -46,15 +46,53 @@ final class Api {
         case ("GET", "/api/overview"):
             let date = req.query["date"] ?? today()
             let stats = store.statsForDate(date)
+            let focus = store.focusStatsForDate(date)
             let obj: [String: Any] = [
                 "date": date,
                 "active_secs": stats.active,
                 "idle_secs": stats.idle,
+                "focus_secs": focus.focus,
+                "multitask_secs": focus.multitask,
+                "event_count": store.eventCountForDate(date),
                 "sessions": store.sessionsForDate(date),
                 "top_apps": store.appStatsForDate(date),
                 "categories": store.categoryStatsForDate(date)
             ]
             return ("200 OK", ct, Api.json(obj), [:])
+
+        case ("GET", "/api/rules"):
+            return ("200 OK", ct, Api.json(["rules": store.allRules(),
+                                            "categories": Store.categories]), [:])
+
+        case ("POST", "/api/rules"):
+            let body = parseBody(req)
+            let category = (body["category"] as? String ?? "").trimmingCharacters(in: .whitespaces)
+            let app = (body["app"] as? String ?? "").trimmingCharacters(in: .whitespaces)
+            let pattern = (body["title_pattern"] as? String ?? "").trimmingCharacters(in: .whitespaces)
+            guard !category.isEmpty, !(app.isEmpty && pattern.isEmpty) else {
+                return ("400 Bad Request", ct, Api.json(["error": "need category and app or title_pattern"]), [:])
+            }
+            store.addRule(app: app, titlePattern: pattern, category: category)
+            return ("200 OK", ct, Api.json(["ok": true, "rules": store.allRules()]), [:])
+
+        case ("POST", "/api/rules/delete"):
+            let body = parseBody(req)
+            guard let id = body["id"] as? Int else {
+                return ("400 Bad Request", ct, Api.json(["error": "missing id"]), [:])
+            }
+            store.deleteRule(id: id)
+            return ("200 OK", ct, Api.json(["ok": true, "rules": store.allRules()]), [:])
+
+        case ("POST", "/api/categorize"):
+            let body = parseBody(req)
+            let title = (body["title"] as? String ?? "").trimmingCharacters(in: .whitespaces)
+            let category = (body["category"] as? String ?? "").trimmingCharacters(in: .whitespaces)
+            let app = (body["app"] as? String ?? "").trimmingCharacters(in: .whitespaces)
+            guard !title.isEmpty, !category.isEmpty else {
+                return ("400 Bad Request", ct, Api.json(["error": "need title and category"]), [:])
+            }
+            store.categorizeTitle(app: app, title: title, category: category)
+            return ("200 OK", ct, Api.json(["ok": true]), [:])
 
         case ("GET", "/api/search"):
             let q = req.query["q"] ?? ""

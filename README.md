@@ -35,10 +35,15 @@ open build/HelloMac.app
 Click the 🧠 menu bar icon → **Open Dashboard** (it opens `http://localhost:4789/`
 with your access token). Tabs:
 
-- **Today** — screen-time stats, top apps, full session timeline, daily review
+- **Today** — active/idle time, focus-vs-multitasking score, tracked-event count, category-distribution donut, top-apps chart, and a full session timeline. Each timeline row has inline **Study / Entertainment / Work / Other** chips — tap one to teach HelloMac how to categorize that title.
 - **Search** — semantic + keyword search with date filters
 - **Brain** — open items (bills/deadlines/watched/notes), upcoming reminders
+- **Rules** — create categorization rules (app + title-contains → category). A new rule re-tags matching history immediately, including same-title activity within ±10 minutes so a video you flicked away from and back to lands in one bucket. Delete any rule to re-categorize affected activity.
 - **Settings** — pause, excluded apps, capture toggles, data purge, MCP setup
+
+### Categories & focus score
+
+Activity rolls up into four buckets — **Study, Entertainment, Work, Other** — chosen by your rules first, then a built-in heuristic. Study + Work count as *focus*; the focus-vs-multitasking score is focus time over total categorized time. You can type any custom category on a rule; the donut and chips adapt.
 
 ## Connect Claude (MCP)
 

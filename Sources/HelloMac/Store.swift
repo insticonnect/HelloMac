@@ -57,6 +57,13 @@ final class Store {
         CREATE INDEX IF NOT EXISTS idx_reminders_fire ON reminders(fire_ts);
 
         CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);
+
+        CREATE TABLE IF NOT EXISTS rules (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            app TEXT DEFAULT '',
+            title_pattern TEXT DEFAULT '',
+            category TEXT
+        );
         """)
 
         db.exec("""
@@ -72,6 +79,126 @@ final class Store {
             INSERT INTO chunks_fts(chunks_fts, rowid, text) VALUES ('delete', old.id, old.text);
         END;
         """)
+
+        seedDefaultRules()
+    }
+
+    // MARK: - Categorization rules (user-defined)
+
+    /// The canonical category set the dashboard organizes around. Users can
+    /// type any category on a rule, but these are the suggested buckets.
+    static let categories = ["Study", "Entertainment", "Work", "Other"]
+    static let focusCategories: Set<String> = ["Study", "Work", "Coding", "Writing"]
+
+    private func seedDefaultRules() {
+        let count = db.query("SELECT COUNT(*) AS n FROM rules").first?.int("n") ?? 0
+        guard count == 0, setting("rules_seeded") == nil else { return }
+        let defaults: [(String, String, String)] = [
+            ("Xcode", "", "Study"),
+            ("Visual Studio Code", "", "Study"),
+            ("Code", "", "Study"),
+            ("Terminal", "", "Study"),
+            ("Safari", "YouTube", "Entertainment"),
+            ("Google Chrome", "YouTube", "Entertainment"),
+            ("Safari", "Netflix", "Entertainment"),
+            ("Google Chrome", "Netflix", "Entertainment"),
+            ("Spotify", "", "Entertainment"),
+            ("Slack", "", "Work"),
+            ("Microsoft Teams", "", "Work"),
+            ("Zoom", "", "Work")
+        ]
+        for r in defaults {
+            db.run("INSERT INTO rules (app, title_pattern, category) VALUES (?, ?, ?)", [r.0, r.1, r.2])
+        }
+        setSetting("rules_seeded", "1")
+    }
+
+    func allRules() -> [[String: Any]] {
+        return db.query("SELECT id, app, title_pattern, category FROM rules ORDER BY id ASC")
+    }
+
+    /// Category for an app/title: user rules win (most specific first),
+    /// otherwise fall back to the built-in heuristic.
+    func categoryFor(app: String, title: String) -> String {
+        let rows = db.query("""
+            SELECT category FROM rules
+            WHERE (app = ? AND title_pattern != '' AND ? LIKE '%' || title_pattern || '%')
+               OR (app = ? AND title_pattern = '')
+               OR (app = '' AND title_pattern != '' AND ? LIKE '%' || title_pattern || '%')
+            ORDER BY (app != '') DESC, (title_pattern != '') DESC
+            LIMIT 1
+            """, [app, title, app, title])
+        if let cat = rows.first?.str("category"), !cat.isEmpty { return cat }
+        return Extractors.heuristicCategory(app: app, title: title)
+    }
+
+    /// Add a rule, then retroactively re-tag matching past events. Also pulls
+    /// in same-title activity within ±10 minutes of any match (so a video you
+    /// flicked away from and back to lands in one category).
+    func addRule(app: String, titlePattern: String, category: String) {
+        db.run("INSERT INTO rules (app, title_pattern, category) VALUES (?, ?, ?)",
+               [app, titlePattern, category])
+
+        var conds: [String] = []
+        var params: [Any?] = [category]
+        if !app.isEmpty { conds.append("app = ?"); params.append(app) }
+        if !titlePattern.isEmpty { conds.append("title LIKE '%' || ? || '%'"); params.append(titlePattern) }
+        guard !conds.isEmpty else { return }
+        let whereClause = conds.joined(separator: " AND ")
+
+        db.run("UPDATE events SET category = ? WHERE is_idle = 0 AND \(whereClause)", params)
+
+        // ±10-minute same-title expansion.
+        let matched = db.query("SELECT DISTINCT title, ts_start, ts_end FROM events WHERE is_idle = 0 AND \(whereClause)",
+                               Array(params.dropFirst()))
+        for m in matched {
+            let title = m.str("title")
+            guard !title.isEmpty else { continue }
+            db.run("""
+                UPDATE events SET category = ?
+                WHERE is_idle = 0 AND title = ?
+                  AND ts_start >= ? AND ts_start <= ?
+                """, [category, title, m.double("ts_start") - 600, m.double("ts_end") + 600])
+        }
+    }
+
+    /// Tag a single observed title directly ("this video is Study"): creates a
+    /// reusable rule and re-tags matching history in one step.
+    func categorizeTitle(app: String, title: String, category: String) {
+        addRule(app: app, titlePattern: title, category: category)
+    }
+
+    func deleteRule(id: Int) {
+        db.run("DELETE FROM rules WHERE id = ?", [id])
+        recategorizeAll()
+    }
+
+    /// Recompute every non-idle event's category from the current rule set.
+    private func recategorizeAll() {
+        let events = db.query("SELECT id, app, title FROM events WHERE is_idle = 0")
+        for e in events {
+            let cat = categoryFor(app: e.str("app"), title: e.str("title"))
+            db.run("UPDATE events SET category = ? WHERE id = ?", [cat, e.int("id")])
+        }
+    }
+
+    func focusStatsForDate(_ dateStr: String) -> (focus: Double, multitask: Double) {
+        let (s, e) = dayBounds(dateStr)
+        var focus = 0.0, multi = 0.0
+        for row in db.query("""
+            SELECT category, SUM(duration) AS total FROM events
+            WHERE ts_start >= ? AND ts_start < ? AND is_idle = 0
+            GROUP BY category
+            """, [s, e]) {
+            if Store.focusCategories.contains(row.str("category")) { focus += row.double("total") }
+            else { multi += row.double("total") }
+        }
+        return (focus, multi)
+    }
+
+    func eventCountForDate(_ dateStr: String) -> Int {
+        let (s, e) = dayBounds(dateStr)
+        return db.query("SELECT COUNT(*) AS n FROM events WHERE ts_start >= ? AND ts_start < ?", [s, e]).first?.int("n") ?? 0
     }
 
     // MARK: - Settings / token
@@ -100,7 +227,7 @@ final class Store {
     func insertEvent(app: String, title: String, url: String?, start: Date, end: Date, isIdle: Bool) {
         let duration = end.timeIntervalSince(start)
         guard duration > 0.5 else { return }
-        let category = Extractors.categorize(app: app, title: title)
+        let category = isIdle ? "Idle" : categoryFor(app: app, title: title)
         db.run("""
             INSERT INTO events (ts_start, ts_end, duration, app, title, url, is_idle, category)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
