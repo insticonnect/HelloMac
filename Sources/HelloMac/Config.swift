@@ -9,6 +9,7 @@ final class Config {
     var captureText = true
     var captureURLs = true
     var autoRevise = true
+    var turboEmbeddings = false   // BYO OpenAI key path (opt-in)
     var port: UInt16 = 4789
     var excludedApps: Set<String> = [
         "1Password", "1Password 7", "Keychain Access", "Passwords", "Bitwarden", "KeePassXC"
@@ -22,6 +23,7 @@ final class Config {
         captureText = store.setting("capture_text") != "0"
         captureURLs = store.setting("capture_urls") != "0"
         autoRevise = store.setting("auto_revise") != "0"
+        turboEmbeddings = store.setting("turbo_embeddings") == "1"
         if let p = UInt16(store.setting("port") ?? ""), p > 1024 { port = p }
         if let raw = store.setting("excluded_apps"), !raw.isEmpty {
             excludedApps = Set(raw.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty })
@@ -34,6 +36,7 @@ final class Config {
         store.setSetting("capture_text", captureText ? "1" : "0")
         store.setSetting("capture_urls", captureURLs ? "1" : "0")
         store.setSetting("auto_revise", autoRevise ? "1" : "0")
+        store.setSetting("turbo_embeddings", turboEmbeddings ? "1" : "0")
         store.setSetting("port", String(port))
         store.setSetting("excluded_apps", excludedApps.sorted().joined(separator: "\n"))
     }

@@ -201,6 +201,16 @@ enum DashboardHTML {
     <div class="toggle-row"><div><b>Auto spaced-repetition for study videos</b><div class="hint">Watched lectures/tutorials get revision reminders after 1/3/7/14/30 days.</div></div><input type="checkbox" id="set-revise" onchange="saveSettings()"></div>
   </div>
   <div class="section">
+    <h2>Search quality (embeddings)</h2>
+    <p class="hint" style="margin-bottom:10px">Active model: <span id="emb-model" class="chip">–</span></p>
+    <div class="toggle-row"><div><b>Turbo accuracy (bring your own OpenAI key)</b><div class="hint">Uses OpenAI text-embedding-3-small for higher-accuracy, multilingual search. Sends captured text to OpenAI — opt-in. Your key is stored in the macOS Keychain, never in the database, and you're billed by OpenAI directly.</div></div><input type="checkbox" id="set-turbo" onchange="saveSettings()"></div>
+    <div class="row" style="margin-top:10px">
+      <input type="text" id="set-openai" placeholder="sk-… (leave blank to keep existing; clears if emptied on save)">
+      <button class="btn" onclick="saveSettings()">Save key</button>
+    </div>
+    <p class="hint" id="openai-status" style="margin-top:6px">&nbsp;</p>
+  </div>
+  <div class="section">
     <h2>Excluded apps (never captured)</h2>
     <textarea id="set-excluded" rows="5" placeholder="One app name per line"></textarea>
     <div class="row" style="margin-top:10px"><button class="btn" onclick="saveSettings()">Save</button></div>
@@ -456,6 +466,9 @@ async function loadSettings() {
   document.getElementById('set-text').checked = s.capture_text;
   document.getElementById('set-urls').checked = s.capture_urls;
   document.getElementById('set-revise').checked = s.auto_revise;
+  document.getElementById('set-turbo').checked = s.turbo_embeddings;
+  document.getElementById('emb-model').textContent = s.embeddings_model || '–';
+  document.getElementById('openai-status').textContent = s.openai_key_set ? 'A key is saved in Keychain.' : 'No key saved.';
   document.getElementById('set-excluded').value = s.excluded_apps.join('\n');
   document.getElementById('q-mode').textContent = s.embeddings ? 'semantic + keyword search' : 'keyword search only';
   const mcp = 'claude mcp add --transport http hellomac http://localhost:' + s.port + '/mcp --header "Authorization: Bearer ' + s.token + '"';
@@ -474,10 +487,16 @@ async function saveSettings() {
     capture_text: document.getElementById('set-text').checked,
     capture_urls: document.getElementById('set-urls').checked,
     auto_revise: document.getElementById('set-revise').checked,
+    turbo_embeddings: document.getElementById('set-turbo').checked,
     excluded_apps: document.getElementById('set-excluded').value.split('\n').map(x => x.trim()).filter(Boolean)
   };
+  // Only send the key when the user typed one (never auto-clear on toggles).
+  const key = document.getElementById('set-openai').value.trim();
+  if (key) body.openai_api_key = key;
   await api('/api/settings', {method:'POST', body: JSON.stringify(body)});
+  document.getElementById('set-openai').value = '';
   updateDot(body.paused);
+  loadSettings();
 }
 
 async function purge() {

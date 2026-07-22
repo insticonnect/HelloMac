@@ -35,6 +35,9 @@ final class Api {
                 "capture_urls": Config.shared.captureURLs,
                 "auto_revise": Config.shared.autoRevise,
                 "embeddings": Embeddings.shared.available,
+                "embeddings_model": Embeddings.shared.describe,
+                "turbo_embeddings": Config.shared.turboEmbeddings,
+                "openai_key_set": (Keychain.get("openai_api_key")?.isEmpty == false),
                 "excluded_apps": Config.shared.excludedApps.sorted(),
                 "port": Int(Config.shared.port),
                 "token": store.apiToken,
@@ -154,8 +157,13 @@ final class Api {
             if let v = body["capture_text"] as? Bool { Config.shared.captureText = v }
             if let v = body["capture_urls"] as? Bool { Config.shared.captureURLs = v }
             if let v = body["auto_revise"] as? Bool { Config.shared.autoRevise = v }
+            if let v = body["turbo_embeddings"] as? Bool { Config.shared.turboEmbeddings = v }
             if let v = body["excluded_apps"] as? [String] {
                 Config.shared.excludedApps = Set(v.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty })
+            }
+            // OpenAI key is sensitive → Keychain, never the DB. "" clears it.
+            if let k = body["openai_api_key"] as? String {
+                Keychain.set("openai_api_key", k.trimmingCharacters(in: .whitespaces))
             }
             Config.shared.save()
             return ("200 OK", ct, Api.json(["ok": true]), [:])

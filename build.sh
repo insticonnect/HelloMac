@@ -38,6 +38,7 @@ swiftc \
     Sources/HelloMac/main.swift \
     Sources/HelloMac/AppDelegate.swift \
     Sources/HelloMac/Config.swift \
+    Sources/HelloMac/Keychain.swift \
     Sources/HelloMac/SQLiteDB.swift \
     Sources/HelloMac/Store.swift \
     Sources/HelloMac/Embeddings.swift \

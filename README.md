@@ -83,6 +83,24 @@ GPU video?"*, *"what's important today?"*, *"remind me to pay the bill in 4 days
 | `complete_item` | Mark an item done |
 | `add_revision` | Enroll an item in the 1/3/7/14/30-day revision ladder |
 
+## Search quality & embeddings
+
+- **Default:** on-device Apple embeddings — private, free, offline, English.
+- **Turbo (opt-in):** paste your own OpenAI API key in Settings to use
+  `text-embedding-3-small` (multilingual, higher accuracy). The key is stored in
+  the **macOS Keychain** (never in the database), text is sent to OpenAI only
+  while enabled, and OpenAI bills you directly.
+- **Retrieval** is hybrid (BM25 keyword + vector cosine, reciprocal-rank fusion)
+  with **multi-query** support (Claude can pass several angles), a **rerank**
+  pass adding lexical-overlap and recency signals, and **time filters**.
+- **No duplicate bloat:** identical screens are hashed out, and *near-identical*
+  screens (embedding cosine > 0.95 within an app) are suppressed before storage.
+- Vectors are tagged with the model that produced them, so switching backends
+  never corrupts search over older history.
+
+The MCP server also advertises a retrieval **playbook** (via the `initialize`
+`instructions` field) telling connected AI clients to fetch comprehensively.
+
 ## Privacy
 
 - Everything stays in `~/Library/Application Support/HelloMac/hellomac.db`

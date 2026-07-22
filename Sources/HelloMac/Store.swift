@@ -37,7 +37,7 @@ final class Store {
 
         CREATE TABLE IF NOT EXISTS embeddings (
             chunk_id INTEGER PRIMARY KEY REFERENCES chunks(id) ON DELETE CASCADE,
-            dim INTEGER, vec BLOB
+            dim INTEGER, vec BLOB, model TEXT DEFAULT ''
         );
 
         CREATE TABLE IF NOT EXISTS facts (
@@ -65,6 +65,13 @@ final class Store {
             category TEXT
         );
         """)
+
+        // Additive migration for DBs created before the `model` column existed.
+        // (ALTER errors harmlessly if the column already exists.)
+        db.exec("ALTER TABLE embeddings ADD COLUMN model TEXT DEFAULT '';")
+        // Prior builds only ever used the Apple backend, so tag legacy vectors
+        // accordingly to keep them visible to semantic search.
+        db.exec("UPDATE embeddings SET model = 'apple-nl-en' WHERE model = '' OR model IS NULL;")
 
         db.exec("""
         CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(text, content='chunks', content_rowid='id');
@@ -327,21 +334,33 @@ final class Store {
         return id > 0 ? id : nil
     }
 
-    func insertEmbedding(chunkId: Int64, vec: [Float]) {
-        db.run("INSERT OR REPLACE INTO embeddings (chunk_id, dim, vec) VALUES (?, ?, ?)",
-               [chunkId, vec.count, Embeddings.data(from: vec)])
+    func insertEmbedding(chunkId: Int64, vec: [Float], model: String) {
+        db.run("INSERT OR REPLACE INTO embeddings (chunk_id, dim, vec, model) VALUES (?, ?, ?, ?)",
+               [chunkId, vec.count, Embeddings.data(from: vec), model])
     }
 
-    /// Hybrid retrieval: FTS5 (BM25) + vector cosine, merged with
-    /// reciprocal-rank fusion. Optional unix-seconds time window.
+    /// Convenience single-query entry point.
     func search(query: String, from: Double?, to: Double?, limit: Int = 20) -> [[String: Any]] {
+        return search(queries: [query], from: from, to: to, limit: limit)
+    }
+
+    /// Hybrid retrieval over one or more query angles (multi-query expansion):
+    /// FTS5 (BM25) + vector cosine fused with reciprocal-rank fusion, then a
+    /// rerank pass adding lexical-overlap and recency signals. The semantic leg
+    /// only compares vectors embedded by the *same* model as the live query, so
+    /// mixed-dimension histories stay correct after a backend switch.
+    func search(queries: [String], from: Double?, to: Double?, limit: Int = 20) -> [[String: Any]] {
+        let qs = queries.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        guard !qs.isEmpty else { return [] }
+
         var ranks: [Int64: Double] = [:]
 
-        // Keyword leg
-        let terms = query.lowercased()
-            .split(whereSeparator: { !$0.isLetter && !$0.isNumber })
-            .map { "\"\($0)\"" }
-        if !terms.isEmpty {
+        // Keyword leg (union across all query angles).
+        for q in qs {
+            let terms = q.lowercased()
+                .split(whereSeparator: { !$0.isLetter && !$0.isNumber })
+                .map { "\"\($0)\"" }
+            guard !terms.isEmpty else { continue }
             var sql = """
                 SELECT c.id AS id, bm25(chunks_fts) AS rank FROM chunks_fts
                 JOIN chunks c ON c.id = chunks_fts.rowid
@@ -352,46 +371,75 @@ final class Store {
             if let t = to { sql += " AND c.ts <= ?"; params.append(t) }
             sql += " ORDER BY rank LIMIT 60"
             for (i, row) in db.query(sql, params).enumerated() {
-                let id = Int64(row.int("id"))
-                ranks[id, default: 0] += 1.0 / Double(60 + i + 1)
+                ranks[Int64(row.int("id")), default: 0] += 1.0 / Double(60 + i + 1)
             }
         }
 
-        // Semantic leg
-        if let qvec = Embeddings.shared.embed(query) {
-            var sql = "SELECT e.chunk_id AS id, e.vec AS vec FROM embeddings e JOIN chunks c ON c.id = e.chunk_id"
-            var params: [Any?] = []
-            var conds: [String] = []
-            if let f = from { conds.append("c.ts >= ?"); params.append(f) }
-            if let t = to { conds.append("c.ts <= ?"); params.append(t) }
-            if !conds.isEmpty { sql += " WHERE " + conds.joined(separator: " AND ") }
-            var scored: [(Int64, Float)] = []
-            for row in db.query(sql, params) {
-                guard let blob = row["vec"] as? Data else { continue }
-                let v = Embeddings.floats(from: blob)
-                guard v.count == qvec.count else { continue }
-                scored.append((Int64(row.int("id")), Embeddings.cosine(qvec, v)))
-            }
-            scored.sort { $0.1 > $1.1 }
-            for (i, item) in scored.prefix(60).enumerated() {
-                ranks[item.0, default: 0] += 1.0 / Double(60 + i + 1)
+        // Semantic leg — load candidate vectors once, score against each query.
+        let activeModel = Embeddings.shared.modelId
+        let qvecs = qs.compactMap { Embeddings.shared.embed($0) }
+        if !qvecs.isEmpty {
+            var sql = """
+                SELECT e.chunk_id AS id, e.vec AS vec FROM embeddings e
+                JOIN chunks c ON c.id = e.chunk_id
+                WHERE e.model = ?
+                """
+            var params: [Any?] = [activeModel]
+            if let f = from { sql += " AND c.ts >= ?"; params.append(f) }
+            if let t = to { sql += " AND c.ts <= ?"; params.append(t) }
+            let rows = db.query(sql, params)
+            for q in qvecs {
+                var scored: [(Int64, Float)] = []
+                for row in rows {
+                    guard let blob = row["vec"] as? Data else { continue }
+                    let v = Embeddings.floats(from: blob)
+                    guard v.count == q.count else { continue }
+                    scored.append((Int64(row.int("id")), Embeddings.cosine(q, v)))
+                }
+                scored.sort { $0.1 > $1.1 }
+                for (i, item) in scored.prefix(60).enumerated() {
+                    ranks[item.0, default: 0] += 1.0 / Double(60 + i + 1)
+                }
             }
         }
 
-        let topIds = ranks.sorted { $0.value > $1.value }.prefix(limit).map { $0.key }
-        guard !topIds.isEmpty else { return [] }
+        // Take a wider candidate pool, then rerank with lexical + recency.
+        let poolIds = ranks.sorted { $0.value > $1.value }.prefix(max(limit * 3, 40)).map { $0.key }
+        guard !poolIds.isEmpty else { return [] }
 
-        let placeholders = topIds.map { _ in "?" }.joined(separator: ",")
+        let placeholders = poolIds.map { _ in "?" }.joined(separator: ",")
         let rows = db.query("SELECT id, ts, app, title, url, text FROM chunks WHERE id IN (\(placeholders))",
-                            topIds.map { $0 as Any? })
+                            poolIds.map { $0 as Any? })
         var byId: [Int64: [String: Any]] = [:]
         for r in rows { byId[Int64(r.int("id"))] = r }
-        return topIds.compactMap { id -> [String: Any]? in
-            guard var r = byId[id] else { return nil }
+
+        // Query term set for lexical overlap.
+        let queryTerms = Set(qs.joined(separator: " ").lowercased()
+            .split(whereSeparator: { !$0.isLetter && !$0.isNumber })
+            .map(String.init).filter { $0.count > 2 })
+        let now = Date().timeIntervalSince1970
+
+        var reranked: [(id: Int64, score: Double)] = []
+        for id in poolIds {
+            guard let r = byId[id] else { continue }
+            let fused = ranks[id] ?? 0
+            let text = (r.str("title") + " " + r.str("text")).lowercased()
+            let hits = queryTerms.reduce(0) { $0 + (text.contains($1) ? 1 : 0) }
+            let lexical = queryTerms.isEmpty ? 0 : Double(hits) / Double(queryTerms.count)
+            // Recency: mild boost, half-life ~14 days.
+            let ageDays = max(0, (now - r.double("ts")) / 86400)
+            let recency = pow(0.5, ageDays / 14.0)
+            let score = fused + 0.15 * lexical + 0.05 * recency
+            reranked.append((id, score))
+        }
+        reranked.sort { $0.score > $1.score }
+
+        return reranked.prefix(limit).compactMap { item -> [String: Any]? in
+            guard var r = byId[item.id] else { return nil }
             let text = r.str("text")
             r["snippet"] = String(text.prefix(400))
             r.removeValue(forKey: "text")
-            r["score"] = ranks[id] ?? 0
+            r["score"] = item.score
             return r
         }
     }
