@@ -124,15 +124,16 @@ final class Store {
         return db.query("SELECT id, app, title_pattern, category FROM rules ORDER BY id ASC")
     }
 
-    /// Category for an app/title: user rules win (most specific first),
-    /// otherwise fall back to the built-in heuristic.
+    /// Category for an app/title: user rules win, choosing the most specific
+    /// (app-matched, then longest title pattern) and, on a tie, the newest rule.
+    /// Falls back to the built-in heuristic.
     func categoryFor(app: String, title: String) -> String {
         let rows = db.query("""
             SELECT category FROM rules
             WHERE (app = ? AND title_pattern != '' AND ? LIKE '%' || title_pattern || '%')
                OR (app = ? AND title_pattern = '')
                OR (app = '' AND title_pattern != '' AND ? LIKE '%' || title_pattern || '%')
-            ORDER BY (app != '') DESC, (title_pattern != '') DESC
+            ORDER BY (app != '') DESC, (title_pattern != '') DESC, LENGTH(title_pattern) DESC, id DESC
             LIMIT 1
             """, [app, title, app, title])
         if let cat = rows.first?.str("category"), !cat.isEmpty { return cat }
@@ -169,10 +170,22 @@ final class Store {
         }
     }
 
-    /// Tag a single observed title directly ("this video is Study"): creates a
-    /// reusable rule and re-tags matching history in one step.
+    /// Tag a single observed title directly ("this video is Study"): REPLACES any
+    /// existing rule for that exact app+title (so re-tapping a different category
+    /// actually switches it, instead of stacking a conflicting rule), then
+    /// re-tags matching history.
     func categorizeTitle(app: String, title: String, category: String) {
+        // Drop any prior exact-title rule for this app so only one wins.
+        db.run("DELETE FROM rules WHERE app = ? AND title_pattern = ?", [app, title])
         addRule(app: app, titlePattern: title, category: category)
+        // Directly re-tag this exact title too (covers app-agnostic matches and
+        // ensures an immediate switch even if the LIKE expansion missed edges).
+        if app.isEmpty {
+            db.run("UPDATE events SET category = ? WHERE is_idle = 0 AND title = ?", [category, title])
+        } else {
+            db.run("UPDATE events SET category = ? WHERE is_idle = 0 AND app = ? AND title = ?",
+                   [category, app, title])
+        }
     }
 
     func deleteRule(id: Int) {
