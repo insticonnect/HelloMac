@@ -36,6 +36,8 @@ enum DashboardHTML {
   .card .v { font-size: 24px; font-weight: 700; }
   .section { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; margin-bottom: 18px; }
   .section h2 { font-size: 14px; margin-bottom: 12px; color: var(--dim); text-transform: uppercase; letter-spacing: .6px; }
+  .sechead { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .sechead h2 { margin-bottom: 12px; }
   .bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
   .bar-row .name { width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .bar-row .bar { flex: 1; height: 10px; background: var(--panel2); border-radius: 5px; overflow: hidden; }
@@ -145,7 +147,8 @@ enum DashboardHTML {
     </div>
     <div class="section"><h2>Top applications</h2><div id="top-apps"><div class="empty">no data yet</div></div></div>
   </div>
-  <div class="section"><h2>Timeline</h2>
+  <div class="section">
+    <div class="sechead"><h2>Timeline</h2><button class="btn small ghost" id="sortbtn" onclick="toggleSort()">Newest first ↓</button></div>
     <p class="hint" style="margin-bottom:8px">Tap a category chip on any row to teach HelloMac — it re-tags that title everywhere, including activity within ±10 min.</p>
     <div id="timeline"><div class="empty">no activity logged for this day</div></div>
   </div>
@@ -389,17 +392,33 @@ async function loadToday() {
         '<div class="time">' + fmtDur(a.total) + '</div></div>').join('');
     } else apps.innerHTML = '<div class="empty">no data yet</div>';
 
-    const tl = document.getElementById('timeline');
-    if (o.sessions.length) {
-      tl.innerHTML = o.sessions.slice().reverse().map(s =>
-        '<div class="sess' + (s.is_idle ? ' idle' : '') + '">' +
-        '<span class="t">' + fmtTime(s.ts_start) + '–' + fmtTime(s.ts_end) + '</span>' +
-        '<span class="app">' + esc(s.app) + '</span>' +
-        '<span class="title">' + esc(s.title) + '</span>' +
-        '<span class="dur">' + fmtDur(s.duration) + '</span>' +
-        (s.is_idle ? '' : catChips(s.app, s.title, s.category)) + '</div>').join('');
-    } else tl.innerHTML = '<div class="empty">no activity logged for this day</div>';
+    lastSessions = o.sessions || [];
+    renderTimeline();
   } catch(e) { console.error(e); }
+}
+
+let lastSessions = [];
+let timelineSort = 'desc'; // 'desc' = newest first
+
+function renderTimeline() {
+  const tl = document.getElementById('timeline');
+  const btn = document.getElementById('sortbtn');
+  if (btn) btn.textContent = timelineSort === 'desc' ? 'Newest first ↓' : 'Oldest first ↑';
+  if (!lastSessions.length) { tl.innerHTML = '<div class="empty">no activity logged for this day</div>'; return; }
+  const arr = lastSessions.slice().sort((a, b) =>
+    timelineSort === 'desc' ? b.ts_start - a.ts_start : a.ts_start - b.ts_start);
+  tl.innerHTML = arr.map(s =>
+    '<div class="sess' + (s.is_idle ? ' idle' : '') + '">' +
+    '<span class="t">' + fmtTime(s.ts_start) + '–' + fmtTime(s.ts_end) + '</span>' +
+    '<span class="app">' + esc(s.app) + '</span>' +
+    '<span class="title">' + esc(s.title) + '</span>' +
+    '<span class="dur">' + fmtDur(s.duration) + '</span>' +
+    (s.is_idle ? '' : catChips(s.app, s.title, s.category)) + '</div>').join('');
+}
+
+function toggleSort() {
+  timelineSort = timelineSort === 'desc' ? 'asc' : 'desc';
+  renderTimeline();
 }
 
 async function loadRules() {
