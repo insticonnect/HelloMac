@@ -2,59 +2,82 @@
 
 The marketing site for **mitthuai / HelloMac** — *your Mac's memory, answerable by Claude.*
 
-**One self-contained HTML file. No build step, no framework, no dependencies.**
-It works the instant you double-click it, and deploys to Vercel with zero configuration.
-Greenish parrot theme, **light + dark** mode (toggle in the header, also follows your OS),
-fully responsive on phone / tablet / desktop.
+Built with **React 18 + Vite**. Componentized, genuinely interactive (theme toggle, animated
+count-up stats, an "Ask Mitthu" chat demo, tabbed MCP tools, an FAQ accordion, scroll-spy nav,
+back-to-top), with a greenish parrot theme, **light + dark** mode, and full phone/tablet/desktop
+responsiveness.
 
-## Files
+## Tech
+
+- **React 18** — function components + hooks, no other UI libraries
+- **Vite 5** — dev server + production build (`base: './'` so assets resolve anywhere)
+- Plain CSS design system in `src/index.css` with `[data-theme]` light/dark tokens
+
+## Structure
 
 ```
 website/
-├── index.html      # the whole site — HTML + CSS + JS + parrot art, all inline
-├── parrot.svg      # favicon
-├── vercel.json     # clean URLs + security headers
-└── README.md
+├── index.html                Vite entry + no-flash theme bootstrap
+├── package.json  vite.config.js  vercel.json
+├── public/parrot.svg          favicon
+└── src/
+    ├── main.jsx  App.jsx  index.css
+    ├── data/site.js           all copy: nav, stats, features, steps, demo, tools, FAQ
+    ├── hooks/
+    │   ├── useTheme.js         dark/light → <html data-theme> + localStorage, OS-aware
+    │   ├── useInView.js        IntersectionObserver → reveal + count-up trigger
+    │   ├── useCountUp.js       eased number animation
+    │   └── useScrollSpy.js     active nav link
+    └── components/
+        ├── Header · Hero · Stats · Features · HowItWorks
+        ├── AskDemo (interactive chat) · Tools (tabs) · ClaudeSetup (copy)
+        ├── Privacy · FAQ (accordion) · CTA · Footer · BackToTop
+        ├── Reveal (scroll-reveal wrapper) · ParrotMark (logo)
 ```
 
-## Preview
-
-Just **double-click `index.html`** — it opens in your browser and works immediately.
-
-Or serve the folder:
+## Develop
 
 ```bash
 cd website
-python3 -m http.server 5173     # then open http://localhost:5173
+npm install
+npm run dev        # http://localhost:5173
 ```
 
-## Deploy on Vercel
+## Build
 
-Because it's plain static files, there's nothing to build.
+```bash
+npm run build      # → dist/
+npm run preview    # serve the production build
+```
 
-### Option A — Vercel dashboard
+## Deploy on Vercel — two easy paths
+
+### Path A · zero config (recommended)
+There's a **`vercel.json` at the repo root** that already tells Vercel how to build this
+subfolder. So you can just:
+
 1. Import the repo at <https://vercel.com/new>.
-2. Set **Root Directory** to `website`.
-3. Framework preset: **Other**. Leave the build command and output directory **empty**.
-4. **Deploy.** Done.
+2. Leave every setting at its default.
+3. **Deploy.** Vercel runs `cd website && npm install && npm run build` and serves `website/dist`.
 
-### Option B — Vercel CLI
+### Path B · point Vercel at this folder
+1. Import the repo, then set **Root Directory** to `website`.
+2. Vercel auto-detects **Vite** (build `npm run build`, output `dist`).
+3. **Deploy.**
+
+Either way it builds and serves correctly — no other tweaks needed.
+
+### Vercel CLI
 ```bash
 npm i -g vercel
 cd website
 vercel --prod
 ```
 
-### Option C — drag & drop
-Zip the `website` folder (or just its contents) and drop it onto
-<https://vercel.com/new> — it deploys as a static site.
-
 ## Customising
 
-Everything lives in `index.html`:
-
-- **Colors / theme** — the CSS variables at the top of the `<style>` block
-  (`--g-400`, `--brand`, …), split into `[data-theme="dark"]` and `[data-theme="light"]`.
-- **Logo / mascot** — the `<symbol id="parrot">` near the top of `<body>` (and `parrot.svg` for the favicon).
-- **Copy / sections** — the HTML in `<main>`.
+- **Content** — edit `src/data/site.js` (nav, stats, features, demo Q&A, tools, FAQ).
+- **Colors / theme** — CSS variables at the top of `src/index.css`, split into
+  `[data-theme="dark"]` and `[data-theme="light"]`.
+- **Logo / mascot** — `src/components/ParrotMark.jsx` and `public/parrot.svg`.
 - **Download link** — point the "Download for macOS" buttons at your release URL.
