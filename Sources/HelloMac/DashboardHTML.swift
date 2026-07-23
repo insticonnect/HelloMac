@@ -41,11 +41,11 @@ enum DashboardHTML {
   .bar-row .bar { flex: 1; height: 10px; background: var(--panel2); border-radius: 5px; overflow: hidden; }
   .bar-row .bar > div { height: 100%; background: linear-gradient(90deg, var(--accent), #a08bff); border-radius: 5px; }
   .bar-row .time { width: 70px; text-align: right; color: var(--dim); font-variant-numeric: tabular-nums; }
-  .sess { display: flex; gap: 12px; padding: 9px 4px; border-bottom: 1px solid var(--line); }
+  .sess { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 10px 4px; border-bottom: 1px solid var(--line); }
   .sess:last-child { border-bottom: none; }
   .sess .t { color: var(--dim); font-variant-numeric: tabular-nums; white-space: nowrap; }
   .sess .app { font-weight: 600; white-space: nowrap; }
-  .sess .title { color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+  .sess .title { color: var(--dim); flex: 1 1 180px; min-width: 120px; overflow-wrap: anywhere; }
   .sess .dur { color: var(--accent2); white-space: nowrap; font-variant-numeric: tabular-nums; }
   .sess.idle { opacity: .45; }
   input[type=text], input[type=date], textarea {
@@ -99,13 +99,13 @@ enum DashboardHTML {
   table.rules tr:last-child td { border-bottom: none; }
   table.rules .any { color: var(--dim); }
   .chip { display: inline-block; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 20px; background: var(--panel2); color: #cdb9ff; }
-  .catpick { display: inline-flex; gap: 4px; margin-left: 8px; }
+  .catpick { display: inline-flex; gap: 4px; flex-shrink: 0; white-space: nowrap; }
   .catpick button { background: var(--panel2); border: 1px solid var(--line); color: var(--dim); font-size: 11px; padding: 2px 8px; border-radius: 12px; cursor: pointer; }
   .catpick button:hover { color: var(--text); border-color: var(--accent); }
   .catpick button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
   .del { color: var(--danger); background: none; border: none; cursor: pointer; font: inherit; font-weight: 600; }
   @media (max-width: 760px) { .cols2 { grid-template-columns: 1fr; } .rule-form { grid-template-columns: 1fr 1fr; } }
-  @media (max-width: 640px) { .sess .title { display: none; } .bar-row .name { width: 110px; } }
+  @media (max-width: 640px) { .bar-row .name { width: 110px; } }
 </style>
 </head>
 <body>
@@ -395,9 +395,9 @@ async function loadToday() {
         '<div class="sess' + (s.is_idle ? ' idle' : '') + '">' +
         '<span class="t">' + fmtTime(s.ts_start) + '–' + fmtTime(s.ts_end) + '</span>' +
         '<span class="app">' + esc(s.app) + '</span>' +
-        '<span class="title">' + esc(s.title) +
-        (s.is_idle ? '' : catChips(s.app, s.title, s.category)) + '</span>' +
-        '<span class="dur">' + fmtDur(s.duration) + '</span></div>').join('');
+        '<span class="title">' + esc(s.title) + '</span>' +
+        '<span class="dur">' + fmtDur(s.duration) + '</span>' +
+        (s.is_idle ? '' : catChips(s.app, s.title, s.category)) + '</div>').join('');
     } else tl.innerHTML = '<div class="empty">no activity logged for this day</div>';
   } catch(e) { console.error(e); }
 }
@@ -555,8 +555,8 @@ async function loadBrain() {
   if (b.reminders.length) {
     rem.innerHTML = b.reminders.map(r =>
       '<div class="fact"><span class="pill ' + esc(r.kind) + '">' + esc(r.kind) + '</span>' +
-      '<span class="title">' + esc(r.title) + (r.interval_idx >= 0 ? ' <span class="hint">(revision ' + (r.interval_idx+1) + ')</span>' : '') + '</span>' +
-      '<span class="due">' + fmtDate(r.fire_ts) + '</span></div>').join('');
+      '<span class="title">' + esc(r.title) + (r.remaining > 1 ? ' <span class="hint">(' + r.remaining + ' scheduled)</span>' : '') + '</span>' +
+      '<span class="due">next ' + fmtDate(r.fire_ts) + '</span></div>').join('');
   } else rem.innerHTML = '<div class="empty">no reminders scheduled</div>';
 }
 

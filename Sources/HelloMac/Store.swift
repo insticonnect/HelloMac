@@ -534,8 +534,14 @@ final class Store {
                [factId, fireTs, intervalIdx])
     }
 
-    /// Spaced-repetition ladder for a fact (e.g. a watched lecture).
+    /// Spaced-repetition ladder for a fact (e.g. a watched lecture). Idempotent:
+    /// clears any existing pending revision reminders for the fact first, so
+    /// re-enrolling (or auto-enroll + a manual "revise" tap) never stacks.
     func addRevisionLadder(factId: Int64, baseTs: Double? = nil) {
+        db.run("""
+            UPDATE reminders SET status = 'cancelled'
+            WHERE fact_id = ? AND status = 'pending' AND interval_idx >= 0
+            """, [factId])
         let base = baseTs ?? Date().timeIntervalSince1970
         let days: [Double] = [1, 3, 7, 14, 30]
         for (i, d) in days.enumerated() {
@@ -584,12 +590,17 @@ final class Store {
         db.run("UPDATE reminders SET status = 'fired' WHERE id = ?", [id])
     }
 
+    /// One row per fact — the NEXT pending reminder plus how many remain — so a
+    /// 5-step revision ladder shows as a single item, not five duplicates.
     func upcomingReminders() -> [[String: Any]] {
         return db.query("""
-            SELECT r.id AS reminder_id, r.fire_ts, r.interval_idx, r.status, f.id AS fact_id, f.kind, f.title
+            SELECT f.id AS fact_id, f.kind, f.title,
+                   MIN(r.fire_ts) AS fire_ts,
+                   COUNT(*) AS remaining
             FROM reminders r JOIN facts f ON f.id = r.fact_id
             WHERE r.status = 'pending' AND f.status = 'open'
-            ORDER BY r.fire_ts ASC LIMIT 50
+            GROUP BY r.fact_id
+            ORDER BY fire_ts ASC LIMIT 50
             """)
     }
 
