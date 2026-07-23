@@ -50,22 +50,31 @@ npm run build      # → dist/
 npm run preview    # serve the production build
 ```
 
-## Deploy on Vercel — two easy paths
+## Deploy on Vercel
 
-### Path A · zero config (recommended)
-There's a **`vercel.json` at the repo root** that already tells Vercel how to build this
-subfolder. So you can just:
+Because the app lives in the `website/` subfolder (the repo root is the macOS app),
+you point Vercel at this folder **once** with the Root Directory setting. Then Vercel
+auto-detects Vite and everything else is default — no custom build commands.
 
+### New project
 1. Import the repo at <https://vercel.com/new>.
-2. Leave every setting at its default.
-3. **Deploy.** Vercel runs `cd website && npm install && npm run build` and serves `website/dist`.
+2. When it asks, set **Root Directory** to `website`
+   (the "Edit" next to Root Directory → pick the `website` folder).
+3. Framework is auto-detected as **Vite** — leave Build/Output at their defaults.
+4. **Deploy.**
 
-### Path B · point Vercel at this folder
-1. Import the repo, then set **Root Directory** to `website`.
-2. Vercel auto-detects **Vite** (build `npm run build`, output `dist`).
-3. **Deploy.**
+### Existing project that failed to build
+If you already created the project, just fix the one setting:
+1. Vercel dashboard → your project → **Settings → General**.
+2. **Root Directory** → set to `website` → **Save**.
+3. Make sure **Build & Development Settings** have no manual overrides
+   (Framework = Vite, everything else "Override" toggles **off**).
+4. **Deployments** tab → **Redeploy**.
 
-Either way it builds and serves correctly — no other tweaks needed.
+> There is intentionally **no `vercel.json` at the repository root** — a root-level build
+> command conflicts with the Root Directory setting and causes
+> `cd: website: No such file or directory`. Setting Root Directory to `website` is all
+> that's needed.
 
 ### Vercel CLI
 ```bash
