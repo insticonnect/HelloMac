@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "mitthuai — your Mac's memory, answerable by Claude. React marketing site.",
+  "description": "mitthuai — your Mac's memory, answerable by Claude. React + Vite marketing site.",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

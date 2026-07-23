@@ -1,17 +1,11 @@
 import { useRef, useState } from 'react'
+import Reveal from './Reveal.jsx'
 
 const SNIPPET = `claude mcp add --transport http hellomac \\
   http://localhost:4789/mcp \\
   --header "Authorization: Bearer <your-token>"`
 
-const TOOLS = [
-  ['search_memory', 'hybrid search over your screen history'],
-  ['get_timeline', 'sessions & stats for any day'],
-  ['get_important', 'bills, deadlines & revisions due'],
-  ['create_reminder', 'add a task with a due date'],
-]
-
-export default function ClaudeSection() {
+export default function ClaudeSetup() {
   const codeRef = useRef(null)
   const [copied, setCopied] = useState(false)
 
@@ -38,29 +32,22 @@ export default function ClaudeSection() {
   return (
     <section className="section" id="claude">
       <div className="container claude-grid">
-        <div className="claude-copy reveal">
+        <Reveal className="claude-copy">
           <span className="eyebrow">For Claude</span>
           <h2>Connect once. Ask anything.</h2>
           <p>
-            mitthuai ships a native MCP server, so Claude Code, Claude Desktop, and the web app
-            treat your memory as a first-class tool.
+            mitthuai ships a native MCP server, so Claude Code, Claude Desktop, and the web app treat
+            your memory as a first-class tool. One command and you're wired up.
           </p>
-          <ul className="tick-list">
-            {TOOLS.map(([name, desc]) => (
-              <li key={name}>
-                <code>{name}</code> — {desc}
-              </li>
-            ))}
-          </ul>
           <div className="try-line">
-            <span>Try asking:</span>
+            <span>Then just ask:</span>
             <em>
               "What did I do today?" · "When did I watch that GPU video?" · "What's important today?"
             </em>
           </div>
-        </div>
+        </Reveal>
 
-        <div className="code-card reveal" aria-label="Setup command">
+        <Reveal className="code-card" aria-label="Setup command">
           <div className="code-head">
             <span className="dot r" />
             <span className="dot y" />
@@ -78,7 +65,7 @@ export default function ClaudeSection() {
           <pre className="code-body">
             <code ref={codeRef}>{SNIPPET}</code>
           </pre>
-        </div>
+        </Reveal>
       </div>
     </section>
   )

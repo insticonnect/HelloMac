@@ -8,7 +8,6 @@
   <title>mitthuai — your Mac's memory, answerable by Claude</title>
   <meta name="description" content="mitthuai (HelloMac) quietly remembers what you read, watch, and work on — then lets Claude search it, remind you to revise, and tell you what's important today. 100% local, private by design." />
 
-  <!-- Open Graph / social -->
   <meta property="og:title" content="mitthuai — your Mac's memory, answerable by Claude" />
   <meta property="og:description" content="A private, on-device memory for your Mac. Ask Claude what you did, what to revise, and what's due today." />
   <meta property="og:type" content="website" />
@@ -21,8 +20,7 @@
       try {
         var saved = localStorage.getItem('mitthu-theme');
         var prefersLight = window.matchMedia('(prefers-color-scheme: light)').matches;
-        var theme = saved || (prefersLight ? 'light' : 'dark');
-        document.documentElement.setAttribute('data-theme', theme);
+        document.documentElement.setAttribute('data-theme', saved || (prefersLight ? 'light' : 'dark'));
       } catch (e) {}
     })();
   </script>

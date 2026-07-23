@@ -1,3 +1,5 @@
+import Reveal from './Reveal.jsx'
+
 const TAGS = [
   'Localhost-only server',
   'Bearer-token auth',
@@ -10,7 +12,7 @@ export default function Privacy() {
   return (
     <section className="section section-alt" id="privacy">
       <div className="container">
-        <div className="privacy-card reveal">
+        <Reveal className="privacy-card">
           <div className="privacy-ic">🔒</div>
           <h2>Private by design</h2>
           <p>
@@ -24,7 +26,7 @@ export default function Privacy() {
               <span key={t}>{t}</span>
             ))}
           </div>
-        </div>
+        </Reveal>
       </div>
     </section>
   )

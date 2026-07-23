@@ -2,38 +2,37 @@
 
 The marketing site for **mitthuai / HelloMac** — *your Mac's memory, answerable by Claude.*
 
-Built with **React + Vite**. Fully responsive (phone / tablet / desktop), with a greenish
-parrot theme and a persistent **dark / light** toggle that also respects the visitor's OS
-preference. No CSS framework — the design system is hand-written CSS variables.
+Built with **React 18 + Vite**. Componentized, genuinely interactive (theme toggle, animated
+count-up stats, an "Ask Mitthu" chat demo, tabbed MCP tools, an FAQ accordion, scroll-spy nav,
+back-to-top), with a greenish parrot theme, **light + dark** mode, and full phone/tablet/desktop
+responsiveness.
 
 ## Tech
 
-- **React 18** (function components + hooks)
-- **Vite 5** for dev server and production build
-- Plain CSS (`src/index.css`) with `[data-theme]` light/dark tokens
-- Zero UI dependencies beyond React
+- **React 18** — function components + hooks, no other UI libraries
+- **Vite 5** — dev server + production build (`base: './'` so assets resolve anywhere)
+- Plain CSS design system in `src/index.css` with `[data-theme]` light/dark tokens
 
-## Project structure
+## Structure
 
 ```
 website/
-├── index.html               # Vite entry + no-flash theme bootstrap
-├── package.json
-├── vite.config.js
-├── vercel.json              # caching + security headers
-├── public/
-│   └── parrot.svg           # Mitthu the parrot — favicon + mascot image
+├── index.html                Vite entry + no-flash theme bootstrap
+├── package.json  vite.config.js  vercel.json
+├── public/parrot.svg          favicon
 └── src/
-    ├── main.jsx             # React entry
-    ├── App.jsx              # page composition
-    ├── index.css            # theme tokens, layout, responsive rules
+    ├── main.jsx  App.jsx  index.css
+    ├── data/site.js           all copy: nav, stats, features, steps, demo, tools, FAQ
     ├── hooks/
-    │   ├── useTheme.js       # dark/light state → <html data-theme> + localStorage
-    │   └── useReveal.js      # IntersectionObserver scroll-reveal
+    │   ├── useTheme.js         dark/light → <html data-theme> + localStorage, OS-aware
+    │   ├── useInView.js        IntersectionObserver → reveal + count-up trigger
+    │   ├── useCountUp.js       eased number animation
+    │   └── useScrollSpy.js     active nav link
     └── components/
-        ├── Header.jsx  Hero.jsx  Strip.jsx  Features.jsx
-        ├── HowItWorks.jsx  ClaudeSection.jsx  Privacy.jsx
-        ├── CTA.jsx  Footer.jsx  ParrotMark.jsx
+        ├── Header · Hero · Stats · Features · HowItWorks
+        ├── AskDemo (interactive chat) · Tools (tabs) · ClaudeSetup (copy)
+        ├── Privacy · FAQ (accordion) · CTA · Footer · BackToTop
+        ├── Reveal (scroll-reveal wrapper) · ParrotMark (logo)
 ```
 
 ## Develop
@@ -41,39 +40,53 @@ website/
 ```bash
 cd website
 npm install
-npm run dev       # http://localhost:5173
+npm run dev        # http://localhost:5173
 ```
 
 ## Build
 
 ```bash
-npm run build     # outputs to dist/
-npm run preview   # serve the production build locally
+npm run build      # → dist/
+npm run preview    # serve the production build
 ```
 
 ## Deploy on Vercel
 
-Vercel auto-detects Vite — no manual settings needed.
+Because the app lives in the `website/` subfolder (the repo root is the macOS app),
+you point Vercel at this folder **once** with the Root Directory setting. Then Vercel
+auto-detects Vite and everything else is default — no custom build commands.
 
-### Option A — Vercel dashboard (easiest)
+### New project
 1. Import the repo at <https://vercel.com/new>.
-2. Set **Root Directory** to `website`.
-3. Framework preset is detected as **Vite** automatically
-   (Build command `npm run build`, Output directory `dist`).
+2. When it asks, set **Root Directory** to `website`
+   (the "Edit" next to Root Directory → pick the `website` folder).
+3. Framework is auto-detected as **Vite** — leave Build/Output at their defaults.
 4. **Deploy.**
 
-### Option B — Vercel CLI
+### Existing project that failed to build
+If you already created the project, just fix the one setting:
+1. Vercel dashboard → your project → **Settings → General**.
+2. **Root Directory** → set to `website` → **Save**.
+3. Make sure **Build & Development Settings** have no manual overrides
+   (Framework = Vite, everything else "Override" toggles **off**).
+4. **Deployments** tab → **Redeploy**.
+
+> There is intentionally **no `vercel.json` at the repository root** — a root-level build
+> command conflicts with the Root Directory setting and causes
+> `cd: website: No such file or directory`. Setting Root Directory to `website` is all
+> that's needed.
+
+### Vercel CLI
 ```bash
 npm i -g vercel
 cd website
-vercel        # preview
-vercel --prod # production
+vercel --prod
 ```
 
 ## Customising
 
-- **Colors / theme** — every color is a CSS variable at the top of `src/index.css`
-  (`--g-400`, `--brand`, …), split into `[data-theme="dark"]` and `[data-theme="light"]` blocks.
-- **Logo** — swap `public/parrot.svg` (favicon + mascot) and `src/components/ParrotMark.jsx` (inline header logo).
-- **Copy / sections** — each section is its own component in `src/components/`.
+- **Content** — edit `src/data/site.js` (nav, stats, features, demo Q&A, tools, FAQ).
+- **Colors / theme** — CSS variables at the top of `src/index.css`, split into
+  `[data-theme="dark"]` and `[data-theme="light"]`.
+- **Logo / mascot** — `src/components/ParrotMark.jsx` and `public/parrot.svg`.
 - **Download link** — point the "Download for macOS" buttons at your release URL.

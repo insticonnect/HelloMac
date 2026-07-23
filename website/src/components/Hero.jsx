@@ -1,9 +1,12 @@
+import ParrotMark from './ParrotMark.jsx'
+import Reveal from './Reveal.jsx'
+
 export default function Hero() {
   return (
     <section className="hero">
       <div className="hero-bg" aria-hidden="true" />
       <div className="container hero-grid">
-        <div className="hero-copy reveal">
+        <Reveal className="hero-copy">
           <span className="pill">
             <span className="pill-dot" /> 100% local · no cloud, no telemetry
           </span>
@@ -27,18 +30,18 @@ export default function Hero() {
               </svg>
               Download for macOS
             </a>
-            <a className="btn btn-ghost" href="#how">
-              See how it works
+            <a className="btn btn-ghost" href="#demo">
+              Try the demo
             </a>
           </div>
           <p className="micro">Free to use · Apple Silicon &amp; Intel · macOS 12+</p>
-        </div>
+        </Reveal>
 
-        <div className="hero-visual reveal" aria-hidden="true">
+        <Reveal className="hero-visual" aria-hidden="true">
           <div className="orb orb-1" />
           <div className="orb orb-2" />
           <div className="mascot">
-            <img src="/parrot.svg" alt="" width="150" height="150" />
+            <ParrotMark className="parrot-svg" />
           </div>
           <div className="chat-card float-a">
             <div className="chat-q">"What did I do today?"</div>
@@ -49,7 +52,7 @@ export default function Hero() {
           <div className="chip chip-a">🧠 remembers</div>
           <div className="chip chip-b">🔁 revises</div>
           <div className="chip chip-c">✅ knows what's due</div>
-        </div>
+        </Reveal>
       </div>
     </section>
   )

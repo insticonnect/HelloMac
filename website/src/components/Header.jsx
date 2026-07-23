@@ -1,31 +1,33 @@
 import { useEffect, useState } from 'react'
 import ParrotMark from './ParrotMark.jsx'
+import { NAV_LINKS } from '../data/site.js'
+import { useScrollSpy } from '../hooks/useScrollSpy.js'
 
-const LINKS = [
-  ['#features', 'Features'],
-  ['#how', 'How it works'],
-  ['#claude', 'For Claude'],
-  ['#privacy', 'Privacy'],
-]
+const SECTION_IDS = NAV_LINKS.map((l) => l.href.slice(1))
 
 export default function Header({ theme, onToggleTheme }) {
   const [menuOpen, setMenuOpen] = useState(false)
+  const [scrolled, setScrolled] = useState(false)
+  const active = useScrollSpy(SECTION_IDS)
 
-  // close the mobile menu on Escape
   useEffect(() => {
-    const onKey = (e) => {
-      if (e.key === 'Escape') setMenuOpen(false)
-    }
+    const onKey = (e) => e.key === 'Escape' && setMenuOpen(false)
+    const onScroll = () => setScrolled(window.scrollY > 8)
     document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
+    window.addEventListener('scroll', onScroll, { passive: true })
+    onScroll()
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      window.removeEventListener('scroll', onScroll)
+    }
   }, [])
 
   return (
-    <header className="site-header" id="top">
+    <header className={`site-header${scrolled ? ' scrolled' : ''}`} id="top">
       <div className="container header-inner">
         <a className="brand" href="#top" aria-label="mitthuai home">
           <span className="brand-mark">
-            <ParrotMark />
+            <ParrotMark className="parrot-svg" />
           </span>
           <span className="brand-name">
             mitthu<span className="brand-accent">ai</span>
@@ -33,9 +35,14 @@ export default function Header({ theme, onToggleTheme }) {
         </a>
 
         <nav className={`nav${menuOpen ? ' open' : ''}`} id="nav" aria-label="Primary">
-          {LINKS.map(([href, label]) => (
-            <a key={href} href={href} onClick={() => setMenuOpen(false)}>
-              {label}
+          {NAV_LINKS.map((l) => (
+            <a
+              key={l.href}
+              href={l.href}
+              className={active === l.href.slice(1) ? 'active' : undefined}
+              onClick={() => setMenuOpen(false)}
+            >
+              {l.label}
             </a>
           ))}
         </nav>
@@ -71,7 +78,7 @@ export default function Header({ theme, onToggleTheme }) {
           </a>
 
           <button
-            className="menu-toggle"
+            className={`menu-toggle${menuOpen ? ' open' : ''}`}
             type="button"
             aria-label={menuOpen ? 'Close menu' : 'Open menu'}
             aria-expanded={menuOpen}

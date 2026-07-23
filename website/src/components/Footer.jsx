@@ -1,19 +1,16 @@
-const LINKS = [
-  ['#features', 'Features'],
-  ['#how', 'How it works'],
-  ['#claude', 'For Claude'],
-  ['#privacy', 'Privacy'],
-  ['https://github.com/insticonnect/hellomac', 'GitHub'],
-]
+import ParrotMark from './ParrotMark.jsx'
+import { NAV_LINKS, GITHUB_URL } from '../data/site.js'
 
 export default function Footer() {
   const year = new Date().getFullYear()
+  const links = [...NAV_LINKS, { href: GITHUB_URL, label: 'GitHub', external: true }]
+
   return (
     <footer className="site-footer">
       <div className="container footer-inner">
         <div className="footer-brand">
           <span className="brand-mark sm" aria-hidden="true">
-            <img src="/parrot.svg" alt="" width="30" height="30" />
+            <ParrotMark className="parrot-svg" />
           </span>
           <div>
             <div className="brand-name">
@@ -23,18 +20,15 @@ export default function Footer() {
           </div>
         </div>
         <nav className="footer-links" aria-label="Footer">
-          {LINKS.map(([href, label]) => {
-            const external = href.startsWith('http')
-            return (
-              <a
-                key={href}
-                href={href}
-                {...(external ? { target: '_blank', rel: 'noopener' } : {})}
-              >
-                {label}
-              </a>
-            )
-          })}
+          {links.map((l) => (
+            <a
+              key={l.href}
+              href={l.href}
+              {...(l.external ? { target: '_blank', rel: 'noopener' } : {})}
+            >
+              {l.label}
+            </a>
+          ))}
         </nav>
       </div>
       <div className="container footer-bottom">
