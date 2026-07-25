@@ -10,7 +10,7 @@ enum DashboardHTML {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>HelloMac — Memory</title>
+<title>MitthuAI — Memory</title>
 <style>
   :root {
     --bg: #0e0f13; --panel: #16181f; --panel2: #1d2029; --line: #262a36;
@@ -112,7 +112,7 @@ enum DashboardHTML {
 </head>
 <body>
 <header>
-  <h1>Hello<span>Mac</span></h1>
+  <h1>🦜 Mitthu<span>AI</span></h1>
   <nav>
     <button id="tab-today" class="active" onclick="show('today')">Today</button>
     <button id="tab-trends" onclick="show('trends')">Trends</button>
@@ -149,7 +149,7 @@ enum DashboardHTML {
   </div>
   <div class="section">
     <div class="sechead"><h2>Timeline</h2><button class="btn small ghost" id="sortbtn" onclick="toggleSort()">Newest first ↓</button></div>
-    <p class="hint" style="margin-bottom:8px">Tap a category chip on any row to teach HelloMac — it re-tags that title everywhere, including activity within ±10 min.</p>
+    <p class="hint" style="margin-bottom:8px">Tap a category chip on any row to teach MitthuAI — it re-tags that title everywhere, including activity within ±10 min.</p>
     <div id="timeline"><div class="empty">no activity logged for this day</div></div>
   </div>
 </div>
@@ -254,7 +254,7 @@ enum DashboardHTML {
   </div>
   <div class="section">
     <h2>Claude.ai web access (mitthuai account)</h2>
-    <p class="hint" style="margin-bottom:8px">Sign in with your mitthuai account to use HelloMac from Claude on the web. Login happens on mitthuai.com (Google Sign-In, identity only — we never read your email). Your memory stays on this Mac; the account only lets Claude reach it through a secure tunnel.</p>
+    <p class="hint" style="margin-bottom:8px">Sign in with your mitthuai account to use MitthuAI from Claude on the web. Login happens on mitthuai.com (Google Sign-In, identity only — we never read your email). Your memory stays on this Mac; the account only lets Claude reach it through a secure tunnel.</p>
     <p class="hint" style="margin-bottom:8px">Status: <b id="acct-status">…</b></p>
     <div class="row"><button class="btn" id="acct-btn" onclick="toggleAccount()">Connect account</button></div>
   </div>
