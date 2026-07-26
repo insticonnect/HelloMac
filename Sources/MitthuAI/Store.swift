@@ -172,7 +172,7 @@ final class Store {
     /// Category for an app/title: user rules win, choosing the most specific
     /// (app-matched, then longest title pattern) and, on a tie, the newest rule.
     /// Falls back to the built-in heuristic.
-    func categoryFor(app: String, title: String) -> String {
+    func categoryFor(app: String, title: String, url: String? = nil) -> String {
         let rows = db.query("""
             SELECT category FROM rules
             WHERE (app = ? AND title_pattern != '' AND ? LIKE '%' || title_pattern || '%')
@@ -182,7 +182,7 @@ final class Store {
             LIMIT 1
             """, [app, title, app, title])
         if let cat = rows.first?.str("category"), !cat.isEmpty { return cat }
-        return Extractors.heuristicCategory(app: app, title: title)
+        return Extractors.heuristicCategory(app: app, title: title, url: url)
     }
 
     /// Add a rule, then retroactively re-tag matching past events. Also pulls
@@ -240,9 +240,9 @@ final class Store {
 
     /// Recompute every non-idle event's category from the current rule set.
     private func recategorizeAll() {
-        let events = db.query("SELECT id, app, title FROM events WHERE is_idle = 0")
+        let events = db.query("SELECT id, app, title, url FROM events WHERE is_idle = 0")
         for e in events {
-            let cat = categoryFor(app: e.str("app"), title: e.str("title"))
+            let cat = categoryFor(app: e.str("app"), title: e.str("title"), url: e.str("url"))
             db.run("UPDATE events SET category = ? WHERE id = ?", [cat, e.int("id")])
         }
     }
@@ -342,7 +342,7 @@ final class Store {
     func insertEvent(app: String, title: String, url: String?, start: Date, end: Date, isIdle: Bool) {
         let duration = end.timeIntervalSince(start)
         guard duration > 0.5 else { return }
-        let category = isIdle ? "Idle" : categoryFor(app: app, title: title)
+        let category = isIdle ? "Idle" : categoryFor(app: app, title: title, url: url)
         db.run("""
             INSERT INTO events (ts_start, ts_end, duration, app, title, url, is_idle, category)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -408,7 +408,7 @@ final class Store {
                 let title = ev.str("title")
                 // Keep the shown category aligned with the shown title, so the
                 // inline chip highlight reflects the title you'd actually tag.
-                if !title.isEmpty { c["title"] = title; c["category"] = ev.str("category") }
+                if !title.isEmpty { c["title"] = title; c["category"] = ev.str("category"); c["url"] = ev.str("url") }
                 var titles = c["titles"] as? [String] ?? []
                 if !title.isEmpty && !titles.contains(title) && titles.count < 8 { titles.append(title) }
                 c["titles"] = titles
@@ -423,6 +423,7 @@ final class Store {
                     "ts_end": ev.double("ts_end"),
                     "duration": ev.double("duration"),
                     "category": ev.str("category"),
+                    "url": ev.str("url"),
                     "is_idle": isIdle
                 ]
             }

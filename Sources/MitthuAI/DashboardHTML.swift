@@ -336,6 +336,12 @@ enum DashboardHTML {
     <p class="hint" id="openai-status" style="margin-top:6px">&nbsp;</p>
   </div>
   <div class="section">
+    <h2>Video sources (always count as video)</h2>
+    <p class="hint" style="margin-bottom:10px">MitthuAI spots a playing video on its own — the player's timecode and controls on screen, /watch-style links, the display staying awake — so most sites work with nothing listed here. Add a domain or keyword to force it anyway, e.g. your college portal. One per line.</p>
+    <textarea id="set-video" rows="4" placeholder="learn.mycollege.edu"></textarea>
+    <div class="row" style="margin-top:10px"><button class="btn" onclick="saveSettings()">Save</button></div>
+  </div>
+  <div class="section">
     <h2>Excluded apps (never captured)</h2>
     <textarea id="set-excluded" rows="5" placeholder="One app name per line"></textarea>
     <div class="row" style="margin-top:10px"><button class="btn" onclick="saveSettings()">Save</button></div>
@@ -977,6 +983,7 @@ async function loadSettings() {
   document.getElementById('emb-model').textContent = s.embeddings_model || '–';
   document.getElementById('openai-status').textContent = s.openai_key_set ? 'A key is saved in Keychain.' : 'No key saved.';
   document.getElementById('set-excluded').value = s.excluded_apps.join('\n');
+  document.getElementById('set-video').value = (s.video_sources || []).join('\n');
   document.getElementById('q-mode').textContent = s.embeddings ? 'semantic + keyword search' : 'keyword search only';
   const mcp = 'claude mcp add --transport http mitthuai http://localhost:' + s.port + '/mcp --header "Authorization: Bearer ' + s.token + '"';
   document.getElementById('mcp-code').textContent = mcp;
@@ -999,7 +1006,8 @@ async function saveSettings() {
     auto_revise: document.getElementById('set-revise').checked,
     launch_at_login: document.getElementById('set-login').checked,
     turbo_embeddings: document.getElementById('set-turbo').checked,
-    excluded_apps: document.getElementById('set-excluded').value.split('\n').map(x => x.trim()).filter(Boolean)
+    excluded_apps: document.getElementById('set-excluded').value.split('\n').map(x => x.trim()).filter(Boolean),
+    video_sources: document.getElementById('set-video').value.split('\n').map(x => x.trim()).filter(Boolean)
   };
   // Only send the key when the user typed one (never auto-clear on toggles).
   const key = document.getElementById('set-openai').value.trim();

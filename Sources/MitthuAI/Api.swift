@@ -39,6 +39,7 @@ final class Api {
                 "turbo_embeddings": Config.shared.turboEmbeddings,
                 "openai_key_set": (Keychain.get("openai_api_key")?.isEmpty == false),
                 "excluded_apps": Config.shared.excludedApps.sorted(),
+                "video_sources": Config.shared.videoSources,
                 "account_paired": AccountPairing.shared.isPaired,
                 "relay_enabled": Config.shared.relayEnabled,
                 "launch_at_login": LoginItem.isEnabled,
@@ -195,6 +196,9 @@ final class Api {
             }
             if let v = body["excluded_apps"] as? [String] {
                 Config.shared.excludedApps = Set(v.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty })
+            }
+            if let v = body["video_sources"] as? [String] {
+                Config.shared.videoSources = v.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
             }
             // OpenAI key is sensitive → Keychain, never the DB. "" clears it.
             if let k = body["openai_api_key"] as? String {
