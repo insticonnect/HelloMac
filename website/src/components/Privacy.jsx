@@ -17,7 +17,7 @@ export default function Privacy() {
           <h2>Private by design</h2>
           <p>
             Your activity, text, and search index live only on your Mac, in{' '}
-            <code>~/Library/Application&nbsp;Support/HelloMac</code>. mitthuai's servers are just a
+            <code>~/Library/Application&nbsp;Support/MitthuAI</code>. mitthuai's servers are just a
             tunnel — they route Claude's questions to your Mac and the answers back. We don't store
             your memory and we don't read your email; Google is used solely to sign you in.
           </p>

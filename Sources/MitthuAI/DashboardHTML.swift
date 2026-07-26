@@ -944,9 +944,9 @@ async function loadSettings() {
   document.getElementById('openai-status').textContent = s.openai_key_set ? 'A key is saved in Keychain.' : 'No key saved.';
   document.getElementById('set-excluded').value = s.excluded_apps.join('\n');
   document.getElementById('q-mode').textContent = s.embeddings ? 'semantic + keyword search' : 'keyword search only';
-  const mcp = 'claude mcp add --transport http hellomac http://localhost:' + s.port + '/mcp --header "Authorization: Bearer ' + s.token + '"';
+  const mcp = 'claude mcp add --transport http mitthuai http://localhost:' + s.port + '/mcp --header "Authorization: Bearer ' + s.token + '"';
   document.getElementById('mcp-code').textContent = mcp;
-  document.getElementById('mcp-desktop').textContent = JSON.stringify({mcpServers:{hellomac:{command:'npx',args:['mcp-remote','http://localhost:' + s.port + '/mcp','--header','Authorization: Bearer ' + s.token]}}});
+  document.getElementById('mcp-desktop').textContent = JSON.stringify({mcpServers:{mitthuai:{command:'npx',args:['mcp-remote','http://localhost:' + s.port + '/mcp','--header','Authorization: Bearer ' + s.token]}}});
   const paired = s.account_paired;
   document.getElementById('acct-status').textContent = paired ? 'connected — Claude.ai web can reach this Mac' : 'not connected';
   document.getElementById('acct-btn').textContent = paired ? 'Disconnect account' : 'Connect account';

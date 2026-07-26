@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-APP_NAME="HelloMac"
+APP_NAME="MitthuAI"
 BUILD_DIR="build"
 APP_DIR="${BUILD_DIR}/${APP_NAME}.app"
 
@@ -35,33 +35,48 @@ swiftc \
     -sdk "$SDK_PATH" \
     -target "$TARGET" \
     ${PLUGIN_FLAGS} \
-    Sources/HelloMac/main.swift \
-    Sources/HelloMac/AppDelegate.swift \
-    Sources/HelloMac/Config.swift \
-    Sources/HelloMac/Keychain.swift \
-    Sources/HelloMac/AccountPairing.swift \
-    Sources/HelloMac/RelayClient.swift \
-    Sources/HelloMac/SQLiteDB.swift \
-    Sources/HelloMac/Store.swift \
-    Sources/HelloMac/Embeddings.swift \
-    Sources/HelloMac/AXReader.swift \
-    Sources/HelloMac/Tracker.swift \
-    Sources/HelloMac/ContentCapture.swift \
-    Sources/HelloMac/Extractors.swift \
-    Sources/HelloMac/ReminderScheduler.swift \
-    Sources/HelloMac/Digest.swift \
-    Sources/HelloMac/HttpServer.swift \
-    Sources/HelloMac/Api.swift \
-    Sources/HelloMac/CalendarExport.swift \
-    Sources/HelloMac/McpServer.swift \
-    Sources/HelloMac/DashboardHTML.swift \
-    Sources/HelloMac/MenuBarView.swift \
+    Sources/MitthuAI/main.swift \
+    Sources/MitthuAI/AppDelegate.swift \
+    Sources/MitthuAI/Config.swift \
+    Sources/MitthuAI/Keychain.swift \
+    Sources/MitthuAI/AccountPairing.swift \
+    Sources/MitthuAI/RelayClient.swift \
+    Sources/MitthuAI/SQLiteDB.swift \
+    Sources/MitthuAI/Store.swift \
+    Sources/MitthuAI/Embeddings.swift \
+    Sources/MitthuAI/AXReader.swift \
+    Sources/MitthuAI/Tracker.swift \
+    Sources/MitthuAI/ContentCapture.swift \
+    Sources/MitthuAI/Extractors.swift \
+    Sources/MitthuAI/ReminderScheduler.swift \
+    Sources/MitthuAI/Digest.swift \
+    Sources/MitthuAI/HttpServer.swift \
+    Sources/MitthuAI/Api.swift \
+    Sources/MitthuAI/CalendarExport.swift \
+    Sources/MitthuAI/McpServer.swift \
+    Sources/MitthuAI/DashboardHTML.swift \
+    Sources/MitthuAI/MenuBarView.swift \
     -o "${APP_DIR}/Contents/MacOS/${APP_NAME}"
 
 echo "Configuring app bundle..."
 cp Info.plist "${APP_DIR}/Contents/Info.plist"
-cp /System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/UserIcon.icns \
-   "${APP_DIR}/Contents/Resources/AppIcon.icns" 2>/dev/null || true
+
+# Generate the parrot app icon from Tools/MakeIcon.swift (AppKit vectors →
+# .iconset → .icns). Falls back to a stock icon if anything here fails so a
+# toolchain hiccup can never break the build.
+echo "Generating app icon..."
+ICONSET="${BUILD_DIR}/AppIcon.iconset"
+if swiftc -O -sdk "$SDK_PATH" -target "$TARGET" Tools/MakeIcon.swift \
+       -o "${BUILD_DIR}/makeicon" 2>/dev/null \
+   && "${BUILD_DIR}/makeicon" "$ICONSET" 2>/dev/null \
+   && iconutil -c icns "$ICONSET" -o "${APP_DIR}/Contents/Resources/AppIcon.icns" 2>/dev/null; then
+    echo "  ✓ parrot icon generated"
+    rm -rf "$ICONSET" "${BUILD_DIR}/makeicon"
+else
+    echo "  ! icon generation failed — using a stock icon"
+    cp /System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/UserIcon.icns \
+       "${APP_DIR}/Contents/Resources/AppIcon.icns" 2>/dev/null || true
+fi
 
 echo "Signing (ad-hoc)..."
 codesign --force --deep -s - --entitlements entitlements.plist "${APP_DIR}" || true

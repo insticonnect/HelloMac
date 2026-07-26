@@ -2,7 +2,7 @@ import Foundation
 
 /// MCP (Model Context Protocol) endpoint — streamable HTTP transport.
 /// Lets Claude Code / Claude Desktop / any MCP client query your memory:
-///   claude mcp add --transport http hellomac http://localhost:4789/mcp \
+///   claude mcp add --transport http mitthuai http://localhost:4789/mcp \
 ///     --header "Authorization: Bearer <token>"
 final class McpServer {
     private let store: Store
@@ -15,7 +15,7 @@ final class McpServer {
 
     /// Retrieval playbook advertised to the client so it fetches comprehensively.
     private static let playbook = """
-    HelloMac is this user's on-device memory of everything they've seen and done \
+    MitthuAI is this user's on-device memory of everything they've seen and done \
     on their Mac (window text, titles, URLs, timeline, and extracted tasks). It \
     is the ONLY source of truth for the user's own recent activity — do not guess \
     or say you lack access; query it.
@@ -120,7 +120,7 @@ final class McpServer {
             let result: [String: Any] = [
                 "protocolVersion": requested,
                 "capabilities": ["tools": [:] as [String: Any]],
-                "serverInfo": ["name": "hellomac", "version": "1.0"],
+                "serverInfo": ["name": "mitthuai", "version": "1.0"],
                 "instructions": Self.playbook
             ]
             return rpcResult(id: id, result: result)

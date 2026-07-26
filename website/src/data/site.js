@@ -1,6 +1,6 @@
 // Central place for repeated content so it's easy to tweak.
 
-export const GITHUB_URL = 'https://github.com/insticonnect/hellomac'
+export const GITHUB_URL = 'https://github.com/insticonnect/mitthuai'
 
 export const NAV_LINKS = [
   { href: '#features', label: 'Features' },

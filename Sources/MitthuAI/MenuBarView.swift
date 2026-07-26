@@ -82,7 +82,7 @@ struct MenuBarView: View {
             }
 
             Button(action: { NSApplication.shared.terminate(nil) }) {
-                Label("Quit HelloMac", systemImage: "power")
+                Label("Quit MitthuAI", systemImage: "power")
                     .frame(maxWidth: .infinity)
             }
         }
