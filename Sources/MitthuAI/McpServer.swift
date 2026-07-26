@@ -69,6 +69,7 @@ final class McpServer {
              properties: [
                 "title": ["type": "string"],
                 "detail": ["type": "string"],
+                "note": ["type": "string", "description": "Short subtitle shown under the title in Brain, the calendar and the reminder notification"],
                 "due": ["type": "string", "description": "ISO date e.g. 2026-07-26"],
                 "days_from_now": ["type": "number"]
              ],
@@ -200,13 +201,18 @@ final class McpServer {
                 return "Nothing urgent: no bills/deadlines due soon and no revisions scheduled today."
             }
             var out = "Important now:\n"
+            // The user's own note on an item says what the page title didn't.
+            func note(_ row: [String: Any]) -> String {
+                let n = row.str("note")
+                return n.isEmpty ? "" : " — note: \(n)"
+            }
             for f in dueSoon {
                 let due = f.double("due_ts")
                 let overdue = due < Date().timeIntervalSince1970 ? " (OVERDUE)" : ""
-                out += "\n• [id \(f.int("id"))] \(f.str("kind")): \(f.str("title")) — due \(Self.fmt(due))\(overdue)"
+                out += "\n• [id \(f.int("id"))] \(f.str("kind")): \(f.str("title")) — due \(Self.fmt(due))\(overdue)\(note(f))"
             }
             for r in revisions {
-                out += "\n• [id \(r.int("fact_id"))] revise: \(r.str("title"))"
+                out += "\n• [id \(r.int("fact_id"))] revise: \(r.str("title"))\(note(r))"
             }
             return out
 
@@ -227,7 +233,8 @@ final class McpServer {
             }
             let id = store.addFact(kind: "note", title: title,
                                    detail: args["detail"] as? String ?? "",
-                                   dueTs: due, source: "mcp")
+                                   dueTs: due, source: "mcp",
+                                   note: args["note"] as? String ?? "")
             if let id = id {
                 var out = "Created reminder [id \(id)]: \(title)"
                 if let d = due { out += ", due \(Self.fmt(d))" }

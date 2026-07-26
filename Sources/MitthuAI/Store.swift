@@ -114,6 +114,10 @@ final class Store {
         // When a fact was marked done — lets the History calendar place
         // completed items (even ones without a due date) on the right day.
         db.exec("ALTER TABLE facts ADD COLUMN done_ts REAL;")
+        // Your own subtitle for an item. Page titles ("… :: IITM Online
+        // Degree") rarely say which lecture it was; `detail` already holds the
+        // video URL, so the note needs its own column.
+        db.exec("ALTER TABLE facts ADD COLUMN note TEXT DEFAULT '';")
         // Prior builds only ever used the Apple backend, so tag legacy vectors
         // accordingly to keep them visible to semantic search.
         db.exec("UPDATE embeddings SET model = 'apple-nl-en' WHERE model = '' OR model IS NULL;")
@@ -592,13 +596,14 @@ final class Store {
     // MARK: - Facts & reminders (the "brain")
 
     @discardableResult
-    func addFact(kind: String, title: String, detail: String, dueTs: Double?, source: String) -> Int64? {
+    func addFact(kind: String, title: String, detail: String, dueTs: Double?, source: String,
+                 note: String = "") -> Int64? {
         let existing = db.query("SELECT id FROM facts WHERE kind = ? AND title = ?", [kind, title])
         if !existing.isEmpty { return nil }
         let id = db.run("""
-            INSERT OR IGNORE INTO facts (kind, title, detail, due_ts, created_ts, source, status)
-            VALUES (?, ?, ?, ?, ?, ?, 'open')
-            """, [kind, title, detail, dueTs, Date().timeIntervalSince1970, source])
+            INSERT OR IGNORE INTO facts (kind, title, detail, due_ts, created_ts, source, status, note)
+            VALUES (?, ?, ?, ?, ?, ?, 'open', ?)
+            """, [kind, title, detail, dueTs, Date().timeIntervalSince1970, source, Store.cleanNote(note)])
         guard id > 0 else { return nil }
         if let due = dueTs {
             let dayBefore = due - 86400
@@ -612,6 +617,15 @@ final class Store {
     func addReminder(factId: Int64, fireTs: Double, intervalIdx: Int) {
         db.run("INSERT INTO reminders (fact_id, fire_ts, interval_idx, status) VALUES (?, ?, ?, 'pending')",
                [factId, fireTs, intervalIdx])
+    }
+
+    /// Your own subtitle for an item — what the page title didn't tell you.
+    func setFactNote(id: Int64, note: String) {
+        db.run("UPDATE facts SET note = ? WHERE id = ?", [Store.cleanNote(note), id])
+    }
+
+    private static func cleanNote(_ note: String) -> String {
+        return String(note.trimmingCharacters(in: .whitespacesAndNewlines).prefix(300))
     }
 
     /// Spaced-repetition ladder for a fact (e.g. a watched lecture). Idempotent:
@@ -641,7 +655,7 @@ final class Store {
             ORDER BY due_ts ASC LIMIT 30
             """, [endOfDay + 2 * 86400])
         let firingToday = db.query("""
-            SELECT r.id AS reminder_id, r.fire_ts, r.interval_idx, f.id AS fact_id, f.kind, f.title, f.detail
+            SELECT r.id AS reminder_id, r.fire_ts, r.interval_idx, f.id AS fact_id, f.kind, f.title, f.detail, f.note
             FROM reminders r JOIN facts f ON f.id = r.fact_id
             WHERE r.status = 'pending' AND r.fire_ts < ? AND f.status = 'open'
             ORDER BY r.fire_ts ASC LIMIT 30
@@ -664,7 +678,7 @@ final class Store {
 
     func pendingReminders(before ts: Double) -> [[String: Any]] {
         return db.query("""
-            SELECT r.id AS reminder_id, r.fire_ts, r.interval_idx, f.id AS fact_id, f.kind, f.title
+            SELECT r.id AS reminder_id, r.fire_ts, r.interval_idx, f.id AS fact_id, f.kind, f.title, f.note
             FROM reminders r JOIN facts f ON f.id = r.fact_id
             WHERE r.status = 'pending' AND r.fire_ts <= ? AND f.status = 'open'
             ORDER BY r.fire_ts ASC LIMIT 20
@@ -692,29 +706,31 @@ final class Store {
         let todayStart = Calendar.current.startOfDay(for: Date()).timeIntervalSince1970
 
         // Attach a clickable link when the fact's detail is a URL (watched
-        // facts store the video URL there).
-        func withLink(_ item: [String: Any], _ detail: String) -> [String: Any] {
+        // facts store the video URL there), and carry the user's own note so
+        // the calendar says which lecture an entry actually was.
+        func withLink(_ item: [String: Any], _ f: [String: Any]) -> [String: Any] {
             var item = item
+            let detail = f.str("detail")
             if detail.hasPrefix("http://") || detail.hasPrefix("https://") { item["url"] = detail }
+            item["note"] = f.str("note")
             return item
         }
 
         // Watch events — the day the video/lecture was first seen.
         for f in db.query("""
-            SELECT id, title, detail, created_ts FROM facts
+            SELECT id, title, detail, note, created_ts FROM facts
             WHERE kind = 'watched' AND created_ts >= ? AND created_ts < ?
             ORDER BY created_ts ASC
             """, [from, to]) {
             items.append(withLink(["type": "watched", "fact_id": f.int("id"), "title": f.str("title"),
-                                   "ts": f.double("created_ts"), "status": "watched"],
-                                  f.str("detail")))
+                                   "ts": f.double("created_ts"), "status": "watched"], f))
         }
 
         // Revision-ladder steps (interval_idx >= 0; idx -1 is a deadline nudge,
         // which the deadline item below already represents).
         for r in db.query("""
             SELECT r.id AS reminder_id, r.fire_ts, r.interval_idx, r.status AS rstatus,
-                   f.id AS fact_id, f.title, f.detail, f.status AS fstatus
+                   f.id AS fact_id, f.title, f.detail, f.note, f.status AS fstatus
             FROM reminders r JOIN facts f ON f.id = r.fact_id
             WHERE r.interval_idx >= 0 AND r.status != 'cancelled'
               AND r.fire_ts >= ? AND r.fire_ts < ?
@@ -730,15 +746,14 @@ final class Store {
             items.append(withLink(["type": "revision", "reminder_id": r.int("reminder_id"),
                                    "fact_id": r.int("fact_id"), "title": r.str("title"),
                                    "ts": fireTs, "interval_idx": r.int("interval_idx"),
-                                   "status": status],
-                                  r.str("detail")))
+                                   "status": status], r))
         }
 
         // Every non-watched item with a due date — bills, deadlines, and
         // items you add in the Brain tab — placed on its due date. Marking
         // one done in Brain shows up here as done.
         for f in db.query("""
-            SELECT id, kind, title, detail, due_ts, status FROM facts
+            SELECT id, kind, title, detail, note, due_ts, status FROM facts
             WHERE kind != 'watched' AND due_ts IS NOT NULL
               AND due_ts >= ? AND due_ts < ?
             ORDER BY due_ts ASC
@@ -750,21 +765,19 @@ final class Store {
             default: status = f.double("due_ts") < now ? "missed" : "upcoming"
             }
             items.append(withLink(["type": "deadline", "fact_id": f.int("id"), "kind": f.str("kind"),
-                                   "title": f.str("title"), "ts": f.double("due_ts"), "status": status],
-                                  f.str("detail")))
+                                   "title": f.str("title"), "ts": f.double("due_ts"), "status": status], f))
         }
 
         // Completed items with NO due date — placed on the day they were
         // marked done, so Brain completions always reflect in the calendar.
         for f in db.query("""
-            SELECT id, kind, title, detail, done_ts FROM facts
+            SELECT id, kind, title, detail, note, done_ts FROM facts
             WHERE kind != 'watched' AND due_ts IS NULL AND status = 'done'
               AND done_ts IS NOT NULL AND done_ts >= ? AND done_ts < ?
             ORDER BY done_ts ASC
             """, [from, to]) {
             items.append(withLink(["type": "deadline", "fact_id": f.int("id"), "kind": f.str("kind"),
-                                   "title": f.str("title"), "ts": f.double("done_ts"), "status": "done"],
-                                  f.str("detail")))
+                                   "title": f.str("title"), "ts": f.double("done_ts"), "status": "done"], f))
         }
 
         return items
@@ -774,7 +787,7 @@ final class Store {
     /// 5-step revision ladder shows as a single item, not five duplicates.
     func upcomingReminders() -> [[String: Any]] {
         return db.query("""
-            SELECT f.id AS fact_id, f.kind, f.title,
+            SELECT f.id AS fact_id, f.kind, f.title, f.note,
                    MIN(r.fire_ts) AS fire_ts,
                    COUNT(*) AS remaining
             FROM reminders r JOIN facts f ON f.id = r.fact_id
