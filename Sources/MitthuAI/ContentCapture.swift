@@ -51,8 +51,12 @@ final class ContentCapture {
         guard let snap = AXReader.snapshot(captureText: Config.shared.captureText,
                                            captureURL: Config.shared.captureURLs) else { return }
 
-        // Let the tracker record the URL on its timeline events too.
+        // Let the tracker record the URL on its timeline events too, along with
+        // any sign that this window is playing a video. Control labels join the
+        // scan here only — they stay out of the stored/embedded text.
         AppState.shared.tracker?.noteURL(snap.url)
+        AppState.shared.tracker?.noteVideoSignals(
+            Extractors.playerSignals(in: snap.text + "\n" + snap.controlsText))
 
         let text = snap.text
         guard text.count > 40 else { return }

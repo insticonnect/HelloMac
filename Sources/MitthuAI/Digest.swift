@@ -37,8 +37,7 @@ enum Digest {
         }
 
         let watched = sessions.filter {
-            let t = ($0.str("title") + " " + $0.str("app")).lowercased()
-            return t.contains("youtube") || t.contains("netflix") || t.contains("udemy") || t.contains("coursera")
+            Extractors.knownVideoSource(($0.str("title") + " " + $0.str("app") + " " + $0.str("url")).lowercased())
         }
         if !watched.isEmpty {
             lines.append("")

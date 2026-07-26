@@ -336,6 +336,14 @@ enum DashboardHTML {
     <p class="hint" id="openai-status" style="margin-top:6px">&nbsp;</p>
   </div>
   <div class="section">
+    <h2>Video sources (always count as video)</h2>
+    <p class="hint" style="margin-bottom:10px">MitthuAI spots a playing video on its own — the player's timecode and controls on screen, /watch-style links, the display staying awake — so most sites work with nothing listed here. Add a domain or keyword to force it anyway, e.g. your college portal. One per line.</p>
+    <textarea id="set-video" rows="4" placeholder="learn.mycollege.edu"></textarea>
+    <div class="row" style="margin-top:10px"><button class="btn" onclick="saveSettings()">Save</button></div>
+    <p class="hint" style="margin-top:14px;margin-bottom:6px"><b>Recent video detection</b> — every decision with its score and reasons, so a missed lecture explains itself:</p>
+    <div id="detection-log" class="hint" style="white-space:pre-wrap;font-family:ui-monospace,monospace;font-size:11px">–</div>
+  </div>
+  <div class="section">
     <h2>Excluded apps (never captured)</h2>
     <textarea id="set-excluded" rows="5" placeholder="One app name per line"></textarea>
     <div class="row" style="margin-top:10px"><button class="btn" onclick="saveSettings()">Save</button></div>
@@ -508,13 +516,19 @@ function renderTimeline() {
   if (!lastSessions.length) { tl.innerHTML = '<div class="empty">no activity logged for this day</div>'; return; }
   const arr = lastSessions.slice().sort((a, b) =>
     timelineSort === 'desc' ? b.ts_start - a.ts_start : a.ts_start - b.ts_start);
-  tl.innerHTML = arr.map(s =>
-    '<div class="sess' + (s.is_idle ? ' idle' : '') + '">' +
+  tl.innerHTML = arr.map(s => {
+    // The session shows the tab that held the most time; every switched-to
+    // title stays visible in the hover tooltip.
+    const tabs = s.titles || [];
+    const tabHint = tabs.length > 1 ? ' <span class="hint">· ' + tabs.length + ' tabs</span>' : '';
+    const tip = tabs.length > 1 ? ' title="' + esc(tabs.join('\n')).replace(/"/g, '&quot;') + '"' : '';
+    return '<div class="sess' + (s.is_idle ? ' idle' : '') + '">' +
     '<span class="t">' + fmtTime(s.ts_start) + '–' + fmtTime(s.ts_end) + '</span>' +
     '<span class="app">' + esc(s.app) + '</span>' +
-    '<span class="title">' + esc(s.title) + '</span>' +
+    '<span class="title"' + tip + '>' + esc(s.title) + tabHint + '</span>' +
     '<span class="dur">' + fmtDur(s.duration) + '</span>' +
-    (s.is_idle ? '' : catChips(s.app, s.title, s.category)) + '</div>').join('');
+    (s.is_idle ? '' : catChips(s.app, s.title, s.category)) + '</div>';
+  }).join('');
 }
 
 function toggleSort() {
@@ -977,6 +991,10 @@ async function loadSettings() {
   document.getElementById('emb-model').textContent = s.embeddings_model || '–';
   document.getElementById('openai-status').textContent = s.openai_key_set ? 'A key is saved in Keychain.' : 'No key saved.';
   document.getElementById('set-excluded').value = s.excluded_apps.join('\n');
+  document.getElementById('set-video').value = (s.video_sources || []).join('\n');
+  document.getElementById('detection-log').textContent =
+    (s.detection_log && s.detection_log.length) ? s.detection_log.slice().reverse().join('\n')
+                                                : 'nothing decided yet — play something for a minute';
   document.getElementById('q-mode').textContent = s.embeddings ? 'semantic + keyword search' : 'keyword search only';
   const mcp = 'claude mcp add --transport http mitthuai http://localhost:' + s.port + '/mcp --header "Authorization: Bearer ' + s.token + '"';
   document.getElementById('mcp-code').textContent = mcp;
@@ -999,7 +1017,8 @@ async function saveSettings() {
     auto_revise: document.getElementById('set-revise').checked,
     launch_at_login: document.getElementById('set-login').checked,
     turbo_embeddings: document.getElementById('set-turbo').checked,
-    excluded_apps: document.getElementById('set-excluded').value.split('\n').map(x => x.trim()).filter(Boolean)
+    excluded_apps: document.getElementById('set-excluded').value.split('\n').map(x => x.trim()).filter(Boolean),
+    video_sources: document.getElementById('set-video').value.split('\n').map(x => x.trim()).filter(Boolean)
   };
   // Only send the key when the user typed one (never auto-clear on toggles).
   const key = document.getElementById('set-openai').value.trim();

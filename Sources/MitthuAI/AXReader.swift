@@ -6,6 +6,11 @@ struct AXSnapshot {
     let bundleId: String
     let windowTitle: String
     let text: String
+    /// Labels of interactive chrome (buttons, sliders) — kept out of `text` so
+    /// the search corpus stays clean. This is where a web video player shows
+    /// itself: its Play/Mute/Full-screen buttons and its seek slider
+    /// ("0:14 of 12:45") are AX elements even while visually hidden.
+    let controlsText: String
     let url: String?
 }
 
@@ -44,17 +49,25 @@ enum AXReader {
         return (front, window, title)
     }
 
-    /// Walk the AX tree of a window collecting user-visible text.
-    /// Depth/node/char limited so a huge web page can't stall the app.
-    static func extractText(from window: AXUIElement, maxChars: Int = 24000) -> String {
+    /// Walk the AX tree of a window collecting user-visible text, plus — in the
+    /// same pass — the labels of buttons and sliders. The latter come back
+    /// separately: they're what identifies an embedded video player (Play,
+    /// Mute, a seek slider reading "0:14 of 12:45"), but they'd be noise in
+    /// the searchable text. Depth/node/char limited so a huge web page can't
+    /// stall the app.
+    static func extractText(from window: AXUIElement, maxChars: Int = 24000) -> (text: String, controls: String) {
         var pieces: [String] = []
+        var controlPieces: [String] = []
         var totalChars = 0
+        var controlChars = 0
         var visited = 0
+        let maxControlChars = 2000
 
         let textRoles: Set<String> = [
             "AXStaticText", "AXTextField", "AXTextArea", "AXHeading",
             "AXLink", "AXCell", "AXComboBox", "AXPopUpButton"
         ]
+        let controlRoles: Set<String> = ["AXButton", "AXSlider", "AXMenuButton"]
 
         func walk(_ el: AXUIElement, depth: Int) {
             if depth > 30 || visited > 3000 || totalChars >= maxChars { return }
@@ -80,6 +93,23 @@ enum AXReader {
                     pieces.append(clipped)
                     totalChars += clipped.count + 1
                 }
+            } else if controlRoles.contains(role) && controlChars < maxControlChars {
+                // Web buttons usually label themselves via AXDescription; a
+                // slider's value ("0:14 of 12:45" on a seek bar) is the payload.
+                var parts: [String] = []
+                for name in [kAXTitleAttribute as String, kAXDescriptionAttribute as String,
+                             kAXValueDescriptionAttribute as String] {
+                    if let s = string(el, name), !s.isEmpty { parts.append(s) }
+                }
+                if let v = attr(el, kAXValueAttribute as String) as? String, !v.isEmpty {
+                    parts.append(v)
+                }
+                let joined = parts.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+                if joined.count > 1 {
+                    let clipped = String(joined.prefix(maxControlChars - controlChars))
+                    controlPieces.append(clipped)
+                    controlChars += clipped.count + 1
+                }
             }
 
             if totalChars >= maxChars { return }
@@ -92,7 +122,7 @@ enum AXReader {
         }
 
         walk(window, depth: 0)
-        return pieces.joined(separator: "\n")
+        return (pieces.joined(separator: "\n"), controlPieces.joined(separator: "\n"))
     }
 
     /// Current URL of the frontmost browser tab, via Apple Events.
@@ -134,20 +164,21 @@ enum AXReader {
         let bundleId = app.bundleIdentifier ?? ""
 
         if Config.shared.isExcluded(app: appName) {
-            return AXSnapshot(appName: appName, bundleId: bundleId, windowTitle: title, text: "", url: nil)
+            return AXSnapshot(appName: appName, bundleId: bundleId, windowTitle: title, text: "", controlsText: "", url: nil)
         }
         if isPrivateWindow(title: title) {
-            return AXSnapshot(appName: appName, bundleId: bundleId, windowTitle: title, text: "", url: nil)
+            return AXSnapshot(appName: appName, bundleId: bundleId, windowTitle: title, text: "", controlsText: "", url: nil)
         }
 
         var text = ""
+        var controlsText = ""
         if captureText, let w = window {
-            text = extractText(from: w)
+            (text, controlsText) = extractText(from: w)
         }
         var url: String? = nil
         if captureURL {
             url = browserURL(bundleId: bundleId)
         }
-        return AXSnapshot(appName: appName, bundleId: bundleId, windowTitle: title, text: text, url: url)
+        return AXSnapshot(appName: appName, bundleId: bundleId, windowTitle: title, text: text, controlsText: controlsText, url: url)
     }
 }
