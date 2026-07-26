@@ -280,15 +280,21 @@ final class McpServer {
         return fmt.string(from: Date())
     }
 
-    static func fmt(_ ts: Double) -> String {
+    /// 12-hour clock with AM/PM. The POSIX locale keeps the format fixed even
+    /// on Macs set to a 24-hour region, where `h:mm a` would otherwise be
+    /// rewritten to a 24-hour pattern.
+    private static func clockFormatter(_ pattern: String) -> DateFormatter {
         let fmt = DateFormatter()
-        fmt.dateFormat = "yyyy-MM-dd HH:mm"
-        return fmt.string(from: Date(timeIntervalSince1970: ts))
+        fmt.locale = Locale(identifier: "en_US_POSIX")
+        fmt.dateFormat = pattern
+        return fmt
+    }
+
+    static func fmt(_ ts: Double) -> String {
+        return clockFormatter("yyyy-MM-dd h:mm a").string(from: Date(timeIntervalSince1970: ts))
     }
 
     static func fmtTime(_ ts: Double) -> String {
-        let fmt = DateFormatter()
-        fmt.dateFormat = "HH:mm"
-        return fmt.string(from: Date(timeIntervalSince1970: ts))
+        return clockFormatter("h:mm a").string(from: Date(timeIntervalSince1970: ts))
     }
 }

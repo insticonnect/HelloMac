@@ -8,6 +8,7 @@ final class MenuBarModel: ObservableObject {
     @Published var paused = Config.shared.paused
     @Published var activeToday = ""
     @Published var importantCount = 0
+    @Published var launchAtLogin = LoginItem.isEnabled
 }
 
 /// The popover shown from the menu bar icon.
@@ -81,6 +82,11 @@ struct MenuBarView: View {
                     .frame(maxWidth: .infinity)
             }
 
+            Toggle("Open at Login", isOn: Binding(get: { model.launchAtLogin },
+                                                  set: { setLaunchAtLogin($0) }))
+                .toggleStyle(.checkbox)
+                .font(.caption)
+
             Button(action: { NSApplication.shared.terminate(nil) }) {
                 Label("Quit MitthuAI", systemImage: "power")
                     .frame(maxWidth: .infinity)
@@ -98,8 +104,17 @@ struct MenuBarView: View {
         model.paused = Config.shared.paused
     }
 
+    /// macOS may refuse the registration, so trust the state it reports back.
+    private func setLaunchAtLogin(_ on: Bool) {
+        let actual = LoginItem.setEnabled(on)
+        Config.shared.launchAtLogin = actual
+        Config.shared.save()
+        model.launchAtLogin = actual
+    }
+
     private func refresh() {
         model.paused = Config.shared.paused
+        model.launchAtLogin = LoginItem.isEnabled
         let fmt = DateFormatter()
         fmt.dateFormat = "yyyy-MM-dd"
         let stats = store.statsForDate(fmt.string(from: Date()))

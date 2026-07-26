@@ -240,10 +240,10 @@ enum DashboardHTML {
     <div class="row">
       <input type="text" id="new-title" placeholder="e.g. Pay electricity bill">
       <input type="date" id="new-due" style="max-width:180px">
-      <input type="time" id="new-time" style="max-width:130px" title="Reminder time (default 09:00)">
+      <input type="time" id="new-time" lang="en-US" style="max-width:150px" title="Reminder time (default 9:00 AM)">
       <button class="btn" onclick="createFact()">Add</button>
     </div>
-    <p class="hint" style="margin-top:6px">Pick a date and (optionally) a time — you'll get the reminder at that exact time; without a time it defaults to 09:00.</p>
+    <p class="hint" style="margin-top:6px">Pick a date and (optionally) a time — you'll get the reminder at that exact time; without a time it defaults to 9:00 AM.</p>
   </div>
   <div class="section"><h2>Open items</h2><div id="facts"><div class="empty">nothing here yet — bills and deadlines you see on screen appear automatically</div></div></div>
   <div class="section"><h2>Upcoming reminders</h2><div id="reminders"><div class="empty">no reminders scheduled</div></div></div>
@@ -322,6 +322,10 @@ enum DashboardHTML {
     <div class="toggle-row"><div><b>Auto spaced-repetition for study videos</b><div class="hint">Watched lectures/tutorials get revision reminders after 1/3/7/14/30 days.</div></div><input type="checkbox" id="set-revise" onchange="saveSettings()"></div>
   </div>
   <div class="section">
+    <h2>Startup</h2>
+    <div class="toggle-row"><div><b>Open MitthuAI at login</b><div class="hint">macOS starts MitthuAI automatically after every login or restart, so tracking is never silently off. Appears in System Settings → General → Login Items.</div></div><input type="checkbox" id="set-login" onchange="saveSettings()"></div>
+  </div>
+  <div class="section">
     <h2>Search quality (embeddings)</h2>
     <p class="hint" style="margin-bottom:10px">Active model: <span id="emb-model" class="chip">–</span></p>
     <div class="toggle-row"><div><b>Turbo accuracy (bring your own OpenAI key)</b><div class="hint">Uses OpenAI text-embedding-3-small for higher-accuracy, multilingual search. Sends captured text to OpenAI — opt-in. Your key is stored in the macOS Keychain, never in the database, and you're billed by OpenAI directly.</div></div><input type="checkbox" id="set-turbo" onchange="saveSettings()"></div>
@@ -375,8 +379,14 @@ async function api(path, opts) {
   return r.json();
 }
 function fmtDur(s) { s = Math.round(s); const h = Math.floor(s/3600), m = Math.floor((s%3600)/60); return h > 0 ? h + 'h ' + m + 'm' : m + 'm'; }
-function fmtTime(ts) { return new Date(ts*1000).toTimeString().slice(0,5); }
-function fmtDate(ts) { const d = new Date(ts*1000); return d.toISOString().slice(0,10) + ' ' + d.toTimeString().slice(0,5); }
+// 12-hour clock with AM/PM, built by hand so it reads the same on every
+// machine regardless of the browser's locale.
+function fmtTime(ts) {
+  const d = new Date(ts*1000);
+  const h = d.getHours(), m = d.getMinutes();
+  return ((h % 12) || 12) + ':' + String(m).padStart(2, '0') + ' ' + (h < 12 ? 'AM' : 'PM');
+}
+function fmtDate(ts) { return todayStr(new Date(ts*1000)) + ' ' + fmtTime(ts); }
 function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
 // Title that opens its source (e.g. the watched video) when we have a URL.
 function linkTitle(title, url) {
@@ -934,7 +944,7 @@ function showDay(k) {
     if (it.status === 'upcoming' || it.status === 'due')
       actions += '<a class="btn small ghost" style="text-decoration:none" target="_blank" href="' + gcalUrl(it) + '">+ GCal</a>';
     return '<div class="fact"><span class="pill" style="color:' + histColor(it) + '">' + histStatusLabel(it) + '</span>' +
-      '<span class="hint" style="min-width:42px">' + fmtTime(it.ts) + '</span>' +
+      '<span class="hint" style="min-width:70px">' + fmtTime(it.ts) + '</span>' +
       '<span class="title">' + histIcon(it) + ' ' + linkTitle(it.title, it.url) + revN + '</span>' + actions + '</div>';
   }).join('') : '<div class="empty">nothing on this day</div>';
   if (histMode !== '3mo') redrawCal(); // refresh the selection highlight
@@ -962,6 +972,7 @@ async function loadSettings() {
   document.getElementById('set-text').checked = s.capture_text;
   document.getElementById('set-urls').checked = s.capture_urls;
   document.getElementById('set-revise').checked = s.auto_revise;
+  document.getElementById('set-login').checked = s.launch_at_login;
   document.getElementById('set-turbo').checked = s.turbo_embeddings;
   document.getElementById('emb-model').textContent = s.embeddings_model || '–';
   document.getElementById('openai-status').textContent = s.openai_key_set ? 'A key is saved in Keychain.' : 'No key saved.';
@@ -986,6 +997,7 @@ async function saveSettings() {
     capture_text: document.getElementById('set-text').checked,
     capture_urls: document.getElementById('set-urls').checked,
     auto_revise: document.getElementById('set-revise').checked,
+    launch_at_login: document.getElementById('set-login').checked,
     turbo_embeddings: document.getElementById('set-turbo').checked,
     excluded_apps: document.getElementById('set-excluded').value.split('\n').map(x => x.trim()).filter(Boolean)
   };

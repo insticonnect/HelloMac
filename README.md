@@ -64,6 +64,11 @@ open build/MitthuAI.app
 A 🦜 parrot icon appears in your menu bar — that's the app. There's no dock icon
 and no window; everything happens from the menu bar and the dashboard.
 
+On its first launch MitthuAI adds itself as a **login item**, so it starts on
+its own every time you log in or restart the Mac (System Settings → General →
+Login Items lists it). Turn that off — or back on — from the menu bar popover
+(**Open at Login**) or Settings → Startup.
+
 **5. Grant permissions (first run):**
 
 1. **Accessibility** (required) — System Settings → Privacy & Security → Accessibility → enable MitthuAI. This is how window titles and on-screen text are read (the same API VoiceOver uses). **Quit and relaunch the app after granting**, or capture stays empty.
@@ -100,10 +105,10 @@ with your access token). Tabs:
 
 - **Today** — active/idle time, focus-vs-multitasking score, tracked-event count, category-distribution donut, top-apps chart, and a full session timeline. Each timeline row has inline **Study / Entertainment / Work / Other** chips — tap one to teach MitthuAI how to categorize that title.
 - **Search** — semantic + keyword search with date filters
-- **Brain** — open items (bills/deadlines/watched/notes), upcoming reminders. Add your own items with a due **date and time** (defaults to 09:00); watched-video titles link straight to the video. Marking an item **done** here also shows it as done in the History calendar — even items without a due date land on the day you completed them.
+- **Brain** — open items (bills/deadlines/watched/notes), upcoming reminders. Add your own items with a due **date and time** (defaults to 9:00 AM); watched-video titles link straight to the video. Marking an item **done** here also shows it as done in the History calendar — even items without a due date land on the day you completed them.
 - **History** — a revision calendar with Week / Month / 3-Month views (◀ ▶ to move between periods). Shows when you watched each video, which revisions you did, missed, or have coming up, with summary cards vs the previous period and a month-by-month comparison table + chart in the 3-month view. Video titles are clickable everywhere — reopen the video straight from the calendar to rewatch or revise. Click any day to see details and mark a revision **did it ✓**. **Export .ics** downloads the upcoming schedule for Google Calendar (Settings → Import & export), Apple Calendar, or Outlook — events carry the video link; each upcoming item also has a one-click **+ GCal** link.
 - **Rules** — create categorization rules (app + title-contains → category). A new rule re-tags matching history immediately, including same-title activity within ±10 minutes so a video you flicked away from and back to lands in one bucket. Delete any rule to re-categorize affected activity.
-- **Settings** — pause, excluded apps, capture toggles, data purge, MCP setup
+- **Settings** — pause, open at login, excluded apps, capture toggles, data purge, MCP setup
 
 ### Categories & focus score
 

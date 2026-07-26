@@ -41,6 +41,7 @@ final class Api {
                 "excluded_apps": Config.shared.excludedApps.sorted(),
                 "account_paired": AccountPairing.shared.isPaired,
                 "relay_enabled": Config.shared.relayEnabled,
+                "launch_at_login": LoginItem.isEnabled,
                 "port": Int(Config.shared.port),
                 "token": store.apiToken,
                 "counts": counts,
@@ -188,6 +189,10 @@ final class Api {
             if let v = body["capture_urls"] as? Bool { Config.shared.captureURLs = v }
             if let v = body["auto_revise"] as? Bool { Config.shared.autoRevise = v }
             if let v = body["turbo_embeddings"] as? Bool { Config.shared.turboEmbeddings = v }
+            // Registration can be refused, so store what macOS actually did.
+            if let v = body["launch_at_login"] as? Bool {
+                Config.shared.launchAtLogin = LoginItem.setEnabled(v)
+            }
             if let v = body["excluded_apps"] as? [String] {
                 Config.shared.excludedApps = Set(v.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty })
             }

@@ -38,6 +38,7 @@ swiftc \
     Sources/MitthuAI/main.swift \
     Sources/MitthuAI/AppDelegate.swift \
     Sources/MitthuAI/Config.swift \
+    Sources/MitthuAI/LoginItem.swift \
     Sources/MitthuAI/Keychain.swift \
     Sources/MitthuAI/AccountPairing.swift \
     Sources/MitthuAI/RelayClient.swift \

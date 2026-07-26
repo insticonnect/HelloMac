@@ -33,6 +33,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         store = Store()
         Config.shared.load(from: store)
 
+        // Start with macOS from now on (opt-in happens on the first launch;
+        // afterwards this just mirrors whatever the user chose).
+        LoginItem.sync()
+
         tracker = Tracker(store: store)
         AppState.shared.tracker = tracker
 
