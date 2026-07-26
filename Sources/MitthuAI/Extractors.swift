@@ -4,38 +4,38 @@ import Foundation
 /// captured text ("goes into brain"), and detect watched videos.
 enum Extractors {
 
-    // MARK: - Categorization
+    // MARK: - Categorization (fallback heuristic; user rules take priority)
 
-    static func categorize(app: String, title: String) -> String {
+    /// Buckets an app/title into Study / Entertainment / Work / Other when no
+    /// user rule matches. Users override any of this from the dashboard.
+    static func heuristicCategory(app: String, title: String) -> String {
         let a = app.lowercased()
         let t = title.lowercased()
 
-        if ["xcode", "visual studio code", "code", "terminal", "iterm2", "intellij idea", "pycharm"].contains(where: { a.contains($0) }) {
-            return "Coding"
-        }
-        if t.contains("youtube") || t.contains("netflix") || t.contains("prime video") || a.contains("spotify") || a.contains("music") || a.contains("tv") {
-            if t.contains("lecture") || t.contains("tutorial") || t.contains("course") { return "Study" }
-            return "Entertainment"
-        }
-        if t.contains("udemy") || t.contains("coursera") || t.contains("khan academy") || t.contains("nptel") || a.contains("anki") || a.contains("preview") && t.contains(".pdf") {
+        // Study: dev tools + learning material.
+        if ["xcode", "visual studio code", "code", "terminal", "iterm2", "intellij idea", "pycharm", "anki"].contains(where: { a.contains($0) }) {
             return "Study"
         }
-        if a.contains("slack") || a.contains("teams") || a.contains("zoom") || a.contains("meet") {
+        if t.contains("udemy") || t.contains("coursera") || t.contains("khan academy") || t.contains("nptel")
+            || t.contains("lecture") || t.contains("tutorial") || t.contains("course")
+            || (a.contains("preview") && t.contains(".pdf")) {
+            return "Study"
+        }
+
+        // Entertainment: media + social.
+        if t.contains("youtube") || t.contains("netflix") || t.contains("prime video") || t.contains("hotstar")
+            || a.contains("spotify") || a.contains("music") || a.contains("tv") || a.contains("vlc")
+            || a.contains("messages") || a.contains("whatsapp") || a.contains("telegram") || a.contains("discord") {
+            return "Entertainment"
+        }
+
+        // Work: comms + meetings + mail.
+        if a.contains("slack") || a.contains("teams") || a.contains("zoom") || a.contains("meet")
+            || a.contains("mail") || a.contains("outlook") || t.contains("inbox") {
             return "Work"
         }
-        if a.contains("mail") || a.contains("outlook") || a.contains("gmail") || t.contains("inbox") {
-            return "Mail"
-        }
-        if a.contains("safari") || a.contains("chrome") || a.contains("firefox") || a.contains("arc") || a.contains("brave") || a.contains("edge") {
-            return "Browsing"
-        }
-        if a.contains("messages") || a.contains("whatsapp") || a.contains("telegram") || a.contains("discord") {
-            return "Social"
-        }
-        if a.contains("notes") || a.contains("obsidian") || a.contains("notion") || a.contains("pages") || a.contains("word") {
-            return "Writing"
-        }
-        return "Uncategorized"
+
+        return "Other"
     }
 
     // MARK: - Deadline / bill extraction from captured text

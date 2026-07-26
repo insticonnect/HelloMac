@@ -52,14 +52,14 @@ final class ReminderScheduler {
                 (header, body) = ("Reminder", title)
             }
 
-            deliver(header: header, body: body, id: "hellomac-reminder-\(reminderId)")
+            deliver(header: header, body: body, id: "mitthuai-reminder-\(reminderId)")
             store.markReminderFired(id: reminderId)
         }
     }
 
     private func deliver(header: String, body: String, id: String) {
         guard notificationsAllowed, Bundle.main.bundleIdentifier != nil else {
-            print("HelloMac Reminder (notifications off): \(header) — \(body)")
+            print("MitthuAI Reminder (notifications off): \(header) — \(body)")
             return
         }
         let content = UNMutableNotificationContent()
@@ -68,7 +68,7 @@ final class ReminderScheduler {
         content.sound = .default
         let request = UNNotificationRequest(identifier: id, content: content, trigger: nil)
         UNUserNotificationCenter.current().add(request) { error in
-            if let e = error { print("HelloMac Reminder delivery error: \(e)") }
+            if let e = error { print("MitthuAI Reminder delivery error: \(e)") }
         }
     }
 }

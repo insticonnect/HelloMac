@@ -8,11 +8,11 @@ private let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.sel
 /// from inside a queue block (they don't — each is a single prepare/step).
 final class SQLiteDB {
     private var db: OpaquePointer?
-    private let queue = DispatchQueue(label: "com.hellomac.db")
+    private let queue = DispatchQueue(label: "com.mitthuai.db")
 
     init(path: String) {
         if sqlite3_open(path, &db) != SQLITE_OK {
-            print("HelloMac DB: failed to open \(path)")
+            print("MitthuAI DB: failed to open \(path)")
         }
         execInternal("PRAGMA journal_mode=WAL;")
         execInternal("PRAGMA foreign_keys=ON;")
@@ -23,7 +23,7 @@ final class SQLiteDB {
     private func execInternal(_ sql: String) {
         var err: UnsafeMutablePointer<CChar>?
         if sqlite3_exec(db, sql, nil, nil, &err) != SQLITE_OK, let e = err {
-            print("HelloMac DB exec error: \(String(cString: e)) in: \(sql.prefix(120))")
+            print("MitthuAI DB exec error: \(String(cString: e)) in: \(sql.prefix(120))")
         }
     }
 
@@ -36,14 +36,14 @@ final class SQLiteDB {
         return queue.sync {
             var stmt: OpaquePointer?
             guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
-                print("HelloMac DB prepare error: \(String(cString: sqlite3_errmsg(db))) in: \(sql.prefix(120))")
+                print("MitthuAI DB prepare error: \(String(cString: sqlite3_errmsg(db))) in: \(sql.prefix(120))")
                 return -1
             }
             defer { sqlite3_finalize(stmt) }
             bind(stmt, params)
             let rc = sqlite3_step(stmt)
             if rc != SQLITE_DONE && rc != SQLITE_ROW {
-                print("HelloMac DB step error: \(String(cString: sqlite3_errmsg(db))) in: \(sql.prefix(120))")
+                print("MitthuAI DB step error: \(String(cString: sqlite3_errmsg(db))) in: \(sql.prefix(120))")
             }
             return sqlite3_last_insert_rowid(db)
         }
@@ -53,7 +53,7 @@ final class SQLiteDB {
         return queue.sync {
             var stmt: OpaquePointer?
             guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
-                print("HelloMac DB prepare error: \(String(cString: sqlite3_errmsg(db))) in: \(sql.prefix(120))")
+                print("MitthuAI DB prepare error: \(String(cString: sqlite3_errmsg(db))) in: \(sql.prefix(120))")
                 return []
             }
             defer { sqlite3_finalize(stmt) }

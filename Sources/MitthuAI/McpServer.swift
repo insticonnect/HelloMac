@@ -2,7 +2,7 @@ import Foundation
 
 /// MCP (Model Context Protocol) endpoint — streamable HTTP transport.
 /// Lets Claude Code / Claude Desktop / any MCP client query your memory:
-///   claude mcp add --transport http hellomac http://localhost:4789/mcp \
+///   claude mcp add --transport http mitthuai http://localhost:4789/mcp \
 ///     --header "Authorization: Bearer <token>"
 final class McpServer {
     private let store: Store
@@ -12,6 +12,26 @@ final class McpServer {
     }
 
     private static let protocolVersion = "2025-03-26"
+
+    /// Retrieval playbook advertised to the client so it fetches comprehensively.
+    private static let playbook = """
+    MitthuAI is this user's on-device memory of everything they've seen and done \
+    on their Mac (window text, titles, URLs, timeline, and extracted tasks). It \
+    is the ONLY source of truth for the user's own recent activity — do not guess \
+    or say you lack access; query it.
+
+    Fetch more, not less:
+    • When the user references past activity ("what did I", "that video/article/\
+      doc", "where did I leave off", "the bill", "what was I working on"), call \
+      search_memory FIRST, before answering.
+    • Use MULTIPLE angles per question: pass several strings in `queries` (exact \
+      terms, synonyms, people, the topic) rather than one narrow query. If results \
+      look thin, broaden and try again.
+    • Use get_timeline for "what did I do today/on <date>"; get_important for \
+      "what's due / important now"; get_daily_digest for a day summary.
+    • Respect time hints ("yesterday", "last week") via from/to.
+    Synthesize across results; cite app/title/time; note if memory seems incomplete.
+    """
 
     private static func tool(_ name: String, _ description: String,
                              properties: [String: [String: String]],
@@ -23,14 +43,15 @@ final class McpServer {
 
     private static let toolDefs: [[String: Any]] = [
         tool("search_memory",
-             "Semantic + keyword search over everything the user has seen on their Mac (window text, titles, URLs). Returns matching text with timestamps, app and window. Use for questions like 'when did I watch X', 'what was that article about Y'.",
+             "Semantic + keyword search over everything the user has seen on their Mac (window text, titles, URLs). Returns matching text with timestamps, app and window. Use for questions like 'when did I watch X', 'what was that article about Y'. Pass MULTIPLE angles in `queries` for best recall.",
              properties: [
-                "query": ["type": "string", "description": "What to search for"],
+                "query": ["type": "string", "description": "A single search string"],
+                "queries": ["type": "array", "description": "Several search angles (exact terms, synonyms, people, topic) — preferred over a single query for recall"],
                 "from": ["type": "string", "description": "Optional ISO date/datetime lower bound, e.g. 2026-07-20"],
                 "to": ["type": "string", "description": "Optional ISO date/datetime upper bound"],
                 "limit": ["type": "integer", "description": "Max results (default 10)"]
              ],
-             required: ["query"]),
+             required: []),
         tool("get_timeline",
              "The user's activity timeline for a day: sessions (app, window, start/end, duration), screen-time stats, top apps. Use for 'what did I do today/on <date>'.",
              properties: ["date": ["type": "string", "description": "Day as YYYY-MM-DD (default: today)"]],
@@ -62,6 +83,7 @@ final class McpServer {
              required: ["id"])
     ]
 
+    /// HTTP transport entry point (used by the local server).
     func handle(_ req: HttpRequest) -> (String, String, Data, [String: String]) {
         let ct = "application/json; charset=utf-8"
         guard req.method == "POST" else {
@@ -70,7 +92,24 @@ final class McpServer {
         guard let msg = (try? JSONSerialization.jsonObject(with: req.body, options: [])) as? [String: Any] else {
             return ("400 Bad Request", ct, rpcError(id: nil, code: -32700, message: "parse error"), [:])
         }
+        guard let data = dispatch(msg) else {
+            return ("202 Accepted", ct, Data(), [:])   // notification, no response body
+        }
+        return ("200 OK", ct, data, [:])
+    }
 
+    /// Relay transport entry point: takes a raw JSON-RPC message and returns the
+    /// response bytes (nil for notifications). Shared dispatch with HTTP.
+    func processRPC(_ data: Data) -> Data? {
+        guard let msg = (try? JSONSerialization.jsonObject(with: data, options: [])) as? [String: Any] else {
+            return rpcError(id: nil, code: -32700, message: "parse error")
+        }
+        return dispatch(msg)
+    }
+
+    /// Single dispatch shared by both transports. Returns response bytes, or
+    /// nil for notifications (which have no reply).
+    private func dispatch(_ msg: [String: Any]) -> Data? {
         let id = msg["id"]
         let method = msg["method"] as? String ?? ""
         let params = msg["params"] as? [String: Any] ?? [:]
@@ -81,18 +120,19 @@ final class McpServer {
             let result: [String: Any] = [
                 "protocolVersion": requested,
                 "capabilities": ["tools": [:] as [String: Any]],
-                "serverInfo": ["name": "hellomac", "version": "1.0"]
+                "serverInfo": ["name": "mitthuai", "version": "1.0"],
+                "instructions": Self.playbook
             ]
-            return ("200 OK", ct, rpcResult(id: id, result: result), [:])
+            return rpcResult(id: id, result: result)
 
         case "notifications/initialized", "notifications/cancelled":
-            return ("202 Accepted", ct, Data(), [:])
+            return nil
 
         case "ping":
-            return ("200 OK", ct, rpcResult(id: id, result: [:] as [String: Any]), [:])
+            return rpcResult(id: id, result: [:] as [String: Any])
 
         case "tools/list":
-            return ("200 OK", ct, rpcResult(id: id, result: ["tools": Self.toolDefs]), [:])
+            return rpcResult(id: id, result: ["tools": Self.toolDefs])
 
         case "tools/call":
             let name = params["name"] as? String ?? ""
@@ -102,10 +142,10 @@ final class McpServer {
                 "content": [["type": "text", "text": text]],
                 "isError": false
             ]
-            return ("200 OK", ct, rpcResult(id: id, result: result), [:])
+            return rpcResult(id: id, result: result)
 
         default:
-            return ("200 OK", ct, rpcError(id: id, code: -32601, message: "method not found: \(method)"), [:])
+            return rpcError(id: id, code: -32601, message: "method not found: \(method)")
         }
     }
 
@@ -114,14 +154,20 @@ final class McpServer {
     private func callTool(name: String, args: [String: Any]) -> String {
         switch name {
         case "search_memory":
-            let query = args["query"] as? String ?? ""
-            guard !query.isEmpty else { return "Error: query is required." }
+            var queries: [String] = []
+            if let arr = args["queries"] as? [Any] {
+                queries = arr.compactMap { $0 as? String }
+            }
+            if let q = args["query"] as? String, !q.isEmpty { queries.append(q) }
+            queries = queries.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+            guard !queries.isEmpty else { return "Error: provide `query` or `queries`." }
             let from = (args["from"] as? String).flatMap(Self.parseISO)
             let to = (args["to"] as? String).flatMap(Self.parseISO)
             let limit = (args["limit"] as? Int) ?? 10
-            let results = store.search(query: query, from: from, to: to, limit: min(limit, 30))
-            if results.isEmpty { return "No matches in memory for \"\(query)\"." }
-            var out = "Memory matches for \"\(query)\":\n"
+            let results = store.search(queries: queries, from: from, to: to, limit: min(limit, 30))
+            let label = queries.joined(separator: " / ")
+            if results.isEmpty { return "No matches in memory for \"\(label)\"." }
+            var out = "Memory matches for \"\(label)\":\n"
             for r in results {
                 out += "\n[\(Self.fmt(r.double("ts")))] \(r.str("app")) — \(r.str("title"))"
                 let url = r.str("url")

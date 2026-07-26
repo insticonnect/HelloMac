@@ -16,14 +16,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var capture: ContentCapture!
     var scheduler: ReminderScheduler!
     var httpServer: HttpServer!
+    var relay: RelayClient!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Ask for Accessibility permission (shows the System Settings prompt).
         let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true]
         let trusted = AXIsProcessTrustedWithOptions(options as CFDictionary)
         if !trusted {
-            print("HelloMac: waiting for Accessibility permission — grant it in System Settings → Privacy & Security → Accessibility, then relaunch if capture stays empty.")
+            print("MitthuAI: waiting for Accessibility permission — grant it in System Settings → Privacy & Security → Accessibility, then relaunch if capture stays empty.")
         }
+
+        // Carry over secrets saved under the old HelloMac bundle (no-op after
+        // the first launch, and on fresh installs).
+        Keychain.migrateLegacyIfNeeded()
 
         store = Store()
         Config.shared.load(from: store)
@@ -38,14 +43,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         scheduler = ReminderScheduler(store: store)
         httpServer = HttpServer(store: store)
+        relay = RelayClient(store: store)
+
+        // Restart the relay tunnel whenever the account gets (re)paired.
+        AccountPairing.shared.onPaired = { [weak self] in
+            self?.relay.stop()
+            self?.relay.start()
+        }
 
         tracker.start()
         capture.start()
         scheduler.start()
         httpServer.start()
+        relay.start()   // no-op unless an account is paired
 
         setupMenuBar()
-        print("HelloMac: running. Dashboard: \(httpServer.dashboardURL)")
+        print("MitthuAI: running. Dashboard: \(httpServer.dashboardURL)")
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -53,6 +66,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         capture?.stop()
         scheduler?.stop()
         httpServer?.stop()
+        relay?.stop()
     }
 
     private func setupMenuBar() {
@@ -65,8 +79,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem?.button {
-            button.image = NSImage(systemSymbolName: "brain.head.profile",
-                                   accessibilityDescription: "HelloMac")
+            // Parrot (mitthu) branding — "bird" is the closest SF Symbol.
+            button.image = NSImage(systemSymbolName: "bird.fill",
+                                   accessibilityDescription: "MitthuAI")
+                ?? NSImage(systemSymbolName: "bird", accessibilityDescription: "MitthuAI")
             button.action = #selector(togglePopover(_:))
             button.target = self
         }

@@ -1,4 +1,4 @@
-# HelloMac — Personal Activity Memory for macOS
+# MitthuAI — Personal Activity Memory for macOS
 
 A menu-bar app that continuously logs what you do on your Mac (apps, window titles, on-screen text), stores it locally as a searchable timeline + vector memory, generates reminders and daily reviews, and exposes everything through a local dashboard and an MCP server so any AI assistant can query your memory.
 
@@ -17,8 +17,8 @@ We are not starting from zero. [Amritkumarchanchal/mitthu](https://github.com/Am
 - `HttpServer.swift` — hand-rolled HTTP server on port 5680 serving an embedded single-page dashboard + JSON API (`/api/stats`, `/api/weekly-stats`, `/api/rules`, `/api/export`), JSON export "for feeding into ChatGPT/Claude", and an Ollama/LM Studio chat integration.
 
 **What mitthu lacks — the gap this project fills:**
-1. **No content capture** — only window *titles*, not the text on screen. HelloMac adds AX-tree text extraction (+ optional OCR), which is what makes real memory/search possible.
-2. **No search at all** — no FTS, no embeddings. HelloMac adds FTS5 + sqlite-vec hybrid retrieval.
+1. **No content capture** — only window *titles*, not the text on screen. MitthuAI adds AX-tree text extraction (+ optional OCR), which is what makes real memory/search possible.
+2. **No search at all** — no FTS, no embeddings. MitthuAI adds FTS5 + sqlite-vec hybrid retrieval.
 3. **No MCP** — the "export JSON and paste into Claude" flow becomes a first-class MCP server any client plugs into.
 4. **No brain/reminders** — no fact extraction, no due dates, no spaced repetition.
 5. **Engineering debt to fix during the port:** raw `sqlite3_*` C calls with heavy copy-paste (introduce a small DB layer + migrations); a fragile hand-rolled HTTP server that binds **all interfaces** (`INADDR_ANY`), unauthenticated — must become localhost-only + token; 2,000-line file mixing server, HTML, and launch-agent logic — split it.
@@ -73,8 +73,8 @@ We are not starting from zero. [Amritkumarchanchal/mitthu](https://github.com/Am
 ```
 
 Two processes total:
-- **HelloMac.app** — menu bar UI + capture engine + ingest pipeline (Swift/SwiftUI).
-- **hellomac-server** — dashboard + API + MCP, launched/managed by the app (can be Swift, or TypeScript/Node for faster iteration on MCP + web UI).
+- **MitthuAI.app** — menu bar UI + capture engine + ingest pipeline (Swift/SwiftUI).
+- **mitthuai-server** — dashboard + API + MCP, launched/managed by the app (can be Swift, or TypeScript/Node for faster iteration on MCP + web UI).
 
 ---
 
@@ -100,7 +100,7 @@ This is the part you correctly identified: macOS ships deep accessibility suppor
 
 ## 4. Data Model (SQLite)
 
-One local database: `~/Library/Application Support/HelloMac/memory.db` (SQLCipher-encrypted, key in macOS Keychain).
+One local database: `~/Library/Application Support/MitthuAI/memory.db` (SQLCipher-encrypted, key in macOS Keychain).
 
 ```sql
 -- Raw timeline: every observation
@@ -160,7 +160,7 @@ daily_digests(date TEXT PRIMARY KEY, summary TEXT, stats_json TEXT)
 
 ## 5. Intelligence Layer
 
-1. **Sessionizer** — merges the event stream into human-level sessions ("Xcode: HelloMac project, 45 min", "YouTube: 'CS231n Lecture 7', 32 min"). Gap > N minutes or app change closes a session.
+1. **Sessionizer** — merges the event stream into human-level sessions ("Xcode: MitthuAI project, 45 min", "YouTube: 'CS231n Lecture 7', 32 min"). Gap > N minutes or app change closes a session.
 2. **Daily digest** — at end of day (or on demand), summarize sessions into a readable review: top apps, what you watched/read/wrote, time distribution. Uses a local LLM (MLX, e.g. a small Llama/Qwen) or an optional user-provided API key — user's choice, local by default.
 3. **Extractors ("goes into brain")** — rule-based first, LLM-assisted later:
    - Deadline/bill patterns in mail & pages you read ("due", "pending", "expires on", amounts + dates) → `facts(kind='bill'|'deadline', due_ts=…)`.
@@ -172,7 +172,7 @@ daily_digests(date TEXT PRIMARY KEY, summary TEXT, stats_json TEXT)
 
 ## 6. Dashboard (any browser, any port)
 
-Local web app served by `hellomac-server` on a configurable port (default e.g. `localhost:4789`), localhost-bound with a token so other apps/users on the machine can't read your memory.
+Local web app served by `mitthuai-server` on a configurable port (default e.g. `localhost:4789`), localhost-bound with a token so other apps/users on the machine can't read your memory.
 
 Views:
 - **Timeline** — vertical day view of sessions; click to expand raw events/text. Date picker to "go back in time."
@@ -259,7 +259,7 @@ Prior art worth studying: **Rewind.ai** (capture UX), **screenpipe** (open-sourc
 Suggested repo layout:
 
 ```
-HelloMac/
+MitthuAI/
 ├── app/            # Xcode project: menu bar app + capture engine (Swift)
 ├── server/         # dashboard API + MCP (TypeScript)
 ├── dashboard/      # web UI (built into server/public)
