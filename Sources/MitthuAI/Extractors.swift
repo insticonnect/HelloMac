@@ -180,6 +180,11 @@ enum Extractors {
         "captions", "subtitles", "picture-in-picture", "1.25x", "1.5x"
     ]
 
+    /// Play/Pause as whole words — a plain `contains("play")` would fire on
+    /// "display" and "playlist".
+    private static let transportRegex = try! NSRegularExpression(
+        pattern: #"\b(play(ing)?|pause[d]?)\b"#, options: [.caseInsensitive])
+
     /// Reads captured on-screen text for the hallmarks of a video player. This
     /// is the platform-independent signal — it recognises a lecture on a college
     /// portal that no brand list will ever name.
@@ -189,7 +194,7 @@ enum Extractors {
         let range = NSRange(text.startIndex..., in: text)
         signals.timecode = timecodeRegex.firstMatch(in: text, options: [], range: range) != nil
         let lower = text.lowercased()
-        let hasTransport = lower.contains("pause") || lower.contains("play")
+        let hasTransport = transportRegex.firstMatch(in: lower, options: [], range: NSRange(lower.startIndex..., in: lower)) != nil
         signals.controls = hasTransport && controlWords.contains(where: { lower.contains($0) })
         return signals
     }
@@ -250,8 +255,13 @@ enum Extractors {
     /// How strongly this activity looks like a video that was actually playing.
     /// Additive and rule-based so it stays debuggable — `detectWatched` logs the
     /// score together with the reasons behind it.
+    ///
+    /// `direct` marks evidence tied to the front window itself. The awake signal
+    /// is system-wide (a Zoom call in another window holds it too) and a brand
+    /// name in a *title* is just browsing, so those two alone never suffice —
+    /// but a brand-named *app* (the Prime Video app, say) is the window itself.
     static func videoScore(app: String, title: String, url: String?,
-                           signals: PlayerSignals) -> (score: Int, reasons: [String]) {
+                           signals: PlayerSignals) -> (score: Int, direct: Bool, reasons: [String]) {
         let a = app.lowercased()
         let u = (url ?? "").lowercased()
         let haystack = (title + " " + app + " " + (url ?? "")).lowercased()
@@ -267,7 +277,11 @@ enum Extractors {
         if !u.isEmpty && videoURLMarkers.contains(where: { u.contains($0) }) { add(2, "video url") }
         if knownVideoSource(haystack) { add(2, "known source") }
 
-        return (score, reasons)
+        let direct = signals.timecode || signals.controls
+            || videoApps.contains(where: { a.contains($0) })
+            || (!u.isEmpty && videoURLMarkers.contains(where: { u.contains($0) }))
+            || knownVideoSource(a)
+        return (score, direct, reasons)
     }
 
     /// Called when a window session ends. `duration` is how long that one title
@@ -280,9 +294,9 @@ enum Extractors {
         // With both text and URL capture switched off there is no evidence to
         // weigh, so fall back to the old name-only rule rather than see nothing.
         let blind = !Config.shared.captureText && !Config.shared.captureURLs
-        let (score, reasons) = videoScore(app: app, title: title, url: url, signals: signals)
+        let (score, direct, reasons) = videoScore(app: app, title: title, url: url, signals: signals)
         let why = reasons.joined(separator: ", ")
-        guard blind ? knownVideoSource(haystack) : score >= 3 else {
+        guard blind ? knownVideoSource(haystack) : (score >= 3 && direct) else {
             if score > 0 { print("MitthuAI: not a video (score \(score): \(why)) — \(title.prefix(60))") }
             return
         }

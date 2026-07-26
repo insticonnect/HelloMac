@@ -20,6 +20,11 @@ final class Tracker: ObservableObject {
     private var lastIsIdle = false
     /// Playback evidence collected during the current window session.
     private var sessionSignals = Extractors.PlayerSignals()
+    /// Watch time per (app, title), surviving tab-aways: flicking to WhatsApp
+    /// mid-lecture doesn't reset the clock — the pieces add up. An entry dies
+    /// after 10 minutes out of sight (the rules engine uses the same ±10 min).
+    private var dwell: [String: (total: Double, signals: Extractors.PlayerSignals,
+                                 firstTs: Double, lastSeen: Double)] = [:]
 
     private let idleThreshold: TimeInterval = 300
 
@@ -122,13 +127,25 @@ final class Tracker: ObservableObject {
                           start: lastEventStart, end: now,
                           isIdle: lastIsIdle)
 
-        // Long-enough media session? Record it as a "watched" memory. How long
-        // is long enough depends on how strong the evidence is — detectWatched
-        // decides; 120s is the floor it could possibly accept.
-        if !lastIsIdle && duration >= 120 {
-            Extractors.detectWatched(app: lastAppName, title: lastWindowTitle,
-                                     url: lastURL, ts: lastEventStart.timeIntervalSince1970,
-                                     duration: duration, signals: sessionSignals, store: store)
+        // Accumulate watch time for this window. Detection judges the total —
+        // not one continuous stretch — so tab-switching away and back keeps
+        // counting; 120s is the floor detectWatched could possibly accept, and
+        // its evidence-strength thresholds still apply to the total.
+        if !lastIsIdle && !lastWindowTitle.isEmpty {
+            let nowTs = now.timeIntervalSince1970
+            let key = lastAppName + "|" + lastWindowTitle
+            var d = dwell[key] ?? (0, Extractors.PlayerSignals(),
+                                   lastEventStart.timeIntervalSince1970, nowTs)
+            d.total += duration
+            d.signals = d.signals.merging(sessionSignals)
+            d.lastSeen = nowTs
+            dwell[key] = d
+            dwell = dwell.filter { nowTs - $0.value.lastSeen < 600 }
+            if d.total >= 120 {
+                Extractors.detectWatched(app: lastAppName, title: lastWindowTitle,
+                                         url: lastURL, ts: d.firstTs,
+                                         duration: d.total, signals: d.signals, store: store)
+            }
         }
     }
 

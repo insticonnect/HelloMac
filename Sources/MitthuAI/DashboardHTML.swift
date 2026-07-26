@@ -514,13 +514,19 @@ function renderTimeline() {
   if (!lastSessions.length) { tl.innerHTML = '<div class="empty">no activity logged for this day</div>'; return; }
   const arr = lastSessions.slice().sort((a, b) =>
     timelineSort === 'desc' ? b.ts_start - a.ts_start : a.ts_start - b.ts_start);
-  tl.innerHTML = arr.map(s =>
-    '<div class="sess' + (s.is_idle ? ' idle' : '') + '">' +
+  tl.innerHTML = arr.map(s => {
+    // The session shows the tab that held the most time; every switched-to
+    // title stays visible in the hover tooltip.
+    const tabs = s.titles || [];
+    const tabHint = tabs.length > 1 ? ' <span class="hint">· ' + tabs.length + ' tabs</span>' : '';
+    const tip = tabs.length > 1 ? ' title="' + esc(tabs.join('\n')).replace(/"/g, '&quot;') + '"' : '';
+    return '<div class="sess' + (s.is_idle ? ' idle' : '') + '">' +
     '<span class="t">' + fmtTime(s.ts_start) + '–' + fmtTime(s.ts_end) + '</span>' +
     '<span class="app">' + esc(s.app) + '</span>' +
-    '<span class="title">' + esc(s.title) + '</span>' +
+    '<span class="title"' + tip + '>' + esc(s.title) + tabHint + '</span>' +
     '<span class="dur">' + fmtDur(s.duration) + '</span>' +
-    (s.is_idle ? '' : catChips(s.app, s.title, s.category)) + '</div>').join('');
+    (s.is_idle ? '' : catChips(s.app, s.title, s.category)) + '</div>';
+  }).join('');
 }
 
 function toggleSort() {

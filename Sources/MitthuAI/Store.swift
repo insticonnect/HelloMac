@@ -394,41 +394,75 @@ final class Store {
             SELECT ts_start, ts_end, duration, app, title, url, is_idle, category FROM events
             WHERE ts_start >= ? AND ts_start < ? ORDER BY ts_start ASC
             """, [s, e])
-        var sessions: [[String: Any]] = []
-        var cur: [String: Any]? = nil
 
-        for ev in events {
-            let isIdle = ev.int("is_idle") == 1
-            let app = isIdle ? "Idle" : ev.str("app")
-            if var c = cur,
-               c.str("app") == app,
-               ev.double("ts_start") - c.double("ts_end") < 180 {
-                c["ts_end"] = ev.double("ts_end")
-                c["duration"] = c.double("duration") + ev.double("duration")
+        // One merged same-app session. Seconds are tallied per tab title so the
+        // finished session is fronted by the title that actually dominated it,
+        // not whichever tab happened to come last. App switches never merge —
+        // only tabs get this mercy.
+        struct Session {
+            var app = "", isIdle = false
+            var tsStart = 0.0, tsEnd = 0.0, duration = 0.0
+            var titles: [String] = []                                       // first-appearance order
+            var perTitle: [String: (secs: Double, category: String, url: String)] = [:]
+            var fallbackCategory = "", fallbackURL = ""                     // for title-less sessions (Idle, bare windows)
+
+            mutating func absorb(_ ev: [String: Any]) {
+                tsEnd = ev.double("ts_end")
+                duration += ev.double("duration")
                 let title = ev.str("title")
-                // Keep the shown category aligned with the shown title, so the
-                // inline chip highlight reflects the title you'd actually tag.
-                if !title.isEmpty { c["title"] = title; c["category"] = ev.str("category"); c["url"] = ev.str("url") }
-                var titles = c["titles"] as? [String] ?? []
-                if !title.isEmpty && !titles.contains(title) && titles.count < 8 { titles.append(title) }
-                c["titles"] = titles
-                cur = c
-            } else {
-                if let c = cur { sessions.append(c) }
-                cur = [
+                guard !title.isEmpty else { return }
+                if !titles.contains(title) && titles.count < 8 { titles.append(title) }
+                var t = perTitle[title] ?? (0, ev.str("category"), ev.str("url"))
+                t.secs += ev.double("duration")
+                t.category = ev.str("category")
+                if !ev.str("url").isEmpty { t.url = ev.str("url") }
+                perTitle[title] = t
+            }
+
+            // Category and url follow the dominant title, so the timeline's
+            // chip highlight and link match the title on show. Ties go to the
+            // earlier-seen title.
+            var asDict: [String: Any] {
+                let top = perTitle.max { a, b in
+                    a.value.secs != b.value.secs
+                        ? a.value.secs < b.value.secs
+                        : (titles.firstIndex(of: a.key) ?? 0) > (titles.firstIndex(of: b.key) ?? 0)
+                }
+                return [
                     "app": app,
-                    "title": ev.str("title"),
-                    "titles": ev.str("title").isEmpty ? [String]() : [ev.str("title")],
-                    "ts_start": ev.double("ts_start"),
-                    "ts_end": ev.double("ts_end"),
-                    "duration": ev.double("duration"),
-                    "category": ev.str("category"),
-                    "url": ev.str("url"),
+                    "title": top?.key ?? "",
+                    "titles": titles,
+                    "ts_start": tsStart,
+                    "ts_end": tsEnd,
+                    "duration": duration,
+                    "category": top?.value.category ?? fallbackCategory,
+                    "url": top?.value.url ?? fallbackURL,
                     "is_idle": isIdle
                 ]
             }
         }
-        if let c = cur { sessions.append(c) }
+
+        var sessions: [[String: Any]] = []
+        var cur: Session? = nil
+        for ev in events {
+            let isIdle = ev.int("is_idle") == 1
+            let app = isIdle ? "Idle" : ev.str("app")
+            if var c = cur, c.app == app, ev.double("ts_start") - c.tsEnd < 180 {
+                c.absorb(ev)
+                cur = c
+            } else {
+                if let c = cur { sessions.append(c.asDict) }
+                var next = Session()
+                next.app = app
+                next.isIdle = isIdle
+                next.tsStart = ev.double("ts_start")
+                next.fallbackCategory = ev.str("category")
+                next.fallbackURL = ev.str("url")
+                next.absorb(ev)
+                cur = next
+            }
+        }
+        if let c = cur { sessions.append(c.asDict) }
         // Drop micro-sessions under 15 seconds to keep the timeline readable.
         return sessions.filter { $0.double("duration") >= 15 }
     }
