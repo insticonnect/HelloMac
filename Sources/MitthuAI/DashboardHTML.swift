@@ -50,7 +50,7 @@ enum DashboardHTML {
   .sess .title { color: var(--dim); flex: 1 1 180px; min-width: 120px; overflow-wrap: anywhere; }
   .sess .dur { color: var(--accent2); white-space: nowrap; font-variant-numeric: tabular-nums; }
   .sess.idle { opacity: .45; }
-  input[type=text], input[type=date], textarea {
+  input[type=text], input[type=date], input[type=time], textarea {
     background: var(--panel2); border: 1px solid var(--line); color: var(--text);
     border-radius: 10px; padding: 10px 14px; font: inherit; width: 100%;
   }
@@ -141,6 +141,8 @@ enum DashboardHTML {
   .mini-cell.blank { background: none; cursor: default; }
   .mini-cell.blank:hover { outline: none; }
   .mini-cell.today { outline: 1px solid var(--accent2); color: var(--accent2); font-weight: 700; }
+  a.tlink { color: inherit; text-decoration: underline dotted; text-underline-offset: 3px; }
+  a.tlink:hover { color: var(--accent); }
   @media (max-width: 760px) { .cols2 { grid-template-columns: 1fr; } .rule-form { grid-template-columns: 1fr 1fr; } .mini3 { grid-template-columns: 1fr; } .wk-grid { grid-template-columns: repeat(2, 1fr); } }
   @media (max-width: 640px) { .bar-row .name { width: 110px; } .cal-cell { min-height: 52px; padding: 4px 5px; } }
 </style>
@@ -238,8 +240,10 @@ enum DashboardHTML {
     <div class="row">
       <input type="text" id="new-title" placeholder="e.g. Pay electricity bill">
       <input type="date" id="new-due" style="max-width:180px">
+      <input type="time" id="new-time" style="max-width:130px" title="Reminder time (default 09:00)">
       <button class="btn" onclick="createFact()">Add</button>
     </div>
+    <p class="hint" style="margin-top:6px">Pick a date and (optionally) a time — you'll get the reminder at that exact time; without a time it defaults to 09:00.</p>
   </div>
   <div class="section"><h2>Open items</h2><div id="facts"><div class="empty">nothing here yet — bills and deadlines you see on screen appear automatically</div></div></div>
   <div class="section"><h2>Upcoming reminders</h2><div id="reminders"><div class="empty">no reminders scheduled</div></div></div>
@@ -374,6 +378,12 @@ function fmtDur(s) { s = Math.round(s); const h = Math.floor(s/3600), m = Math.f
 function fmtTime(ts) { return new Date(ts*1000).toTimeString().slice(0,5); }
 function fmtDate(ts) { const d = new Date(ts*1000); return d.toISOString().slice(0,10) + ' ' + d.toTimeString().slice(0,5); }
 function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+// Title that opens its source (e.g. the watched video) when we have a URL.
+function linkTitle(title, url) {
+  return (url && (url.indexOf('http://') === 0 || url.indexOf('https://') === 0))
+    ? '<a class="tlink" href="' + esc(url) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()">' + esc(title) + ' ↗</a>'
+    : esc(title);
+}
 function todayStr(d) { d = d || new Date(); const off = d.getTimezoneOffset(); return new Date(d.getTime() - off*60000).toISOString().slice(0,10); }
 
 const CAT_COLORS = {'Study':'#4fd1a5','Entertainment':'#7c6cff','Work':'#ffb454','Other':'#5b6274','Idle':'#3a3f4d','Uncategorized':'#5b6274'};
@@ -645,7 +655,7 @@ async function loadBrain() {
       const due = f.due_ts ? '<span class="due' + (f.due_ts < now ? ' over' : '') + '">due ' + fmtDate(f.due_ts) + '</span>' : '';
       const revBtn = f.kind === 'watched' ? '<button class="btn small ghost" onclick="factAction(' + f.id + ',\'revise\')">revise</button>' : '';
       return '<div class="fact"><span class="pill ' + esc(f.kind) + '">' + esc(f.kind) + '</span>' +
-        '<span class="title">' + esc(f.title) + '</span>' + due + revBtn +
+        '<span class="title">' + linkTitle(f.title, f.detail) + '</span>' + due + revBtn +
         '<button class="btn small" onclick="factAction(' + f.id + ',\'complete\')">done</button>' +
         '<button class="btn small ghost" onclick="factAction(' + f.id + ',\'dismiss\')">✕</button></div>';
     }).join('');
@@ -669,10 +679,13 @@ async function createFact() {
   const title = document.getElementById('new-title').value.trim();
   if (!title) return;
   const due = document.getElementById('new-due').value;
+  const time = document.getElementById('new-time').value; // "HH:MM" or ""
   const body = {action:'create', title:title};
-  if (due) body.due_ts = new Date(due).getTime()/1000 + 9*3600;
+  // Local date + chosen time (09:00 when no time picked).
+  if (due) body.due_ts = new Date(due + 'T' + (time || '09:00')).getTime()/1000;
   await api('/api/fact', {method:'POST', body: JSON.stringify(body)});
   document.getElementById('new-title').value = '';
+  document.getElementById('new-time').value = '';
   loadBrain();
 }
 
@@ -687,7 +700,16 @@ const MONTH_NAMES = ['January','February','March','April','May','June','July','A
 const DOW = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 
 function histColor(it) { return HIST_COLORS[it.status] || '#5b6274'; }
-function histIcon(it) { return it.type === 'watched' ? '🎬' : (it.type === 'deadline' ? (it.kind === 'bill' ? '💸' : '⏰') : '🔁'); }
+function histIcon(it) {
+  if (it.type === 'watched') return '🎬';
+  if (it.type === 'revision') return '🔁';
+  return it.kind === 'bill' ? '💸' : (it.kind === 'deadline' ? '⏰' : '📝');
+}
+// 'done' reads as 'revised' only for revision steps; tasks read as 'done'.
+function histStatusLabel(it) {
+  if (it.status === 'done' && it.type !== 'revision') return 'done';
+  return HIST_LABELS[it.status] || it.status;
+}
 
 function setHistMode(m) {
   histMode = m; histSelDay = null;
@@ -783,7 +805,7 @@ function weekHTML(s) {
     const k = todayStr(d);
     const items = (histByDay[k] || []).slice().sort((a, b) => a.ts - b.ts);
     const chips = items.slice(0, 8).map(it =>
-      '<div class="hchip"><i style="background:' + histColor(it) + '"></i><span>' + histIcon(it) + ' ' + esc(it.title) + '</span></div>').join('') +
+      '<div class="hchip"><i style="background:' + histColor(it) + '"></i><span>' + histIcon(it) + ' ' + linkTitle(it.title, it.url) + '</span></div>').join('') +
       (items.length > 8 ? '<div class="cal-more">+' + (items.length - 8) + ' more</div>' : '');
     cols += '<div class="wk-col' + (k === t ? ' today' : '') + (k === histSelDay ? ' sel' : '') + '" onclick="showDay(\'' + k + '\')">' +
       '<div class="dn">' + DOW[i] + ' ' + d.getDate() + '</div>' +
@@ -813,7 +835,7 @@ function monthHTML(y, mo, mini) {
         (bg ? ' style="background:' + bg + '26;box-shadow:inset 0 -2px 0 ' + bg + '"' : '') +
         ' onclick="showDay(\'' + k + '\')">' + d + '</div>';
     } else {
-      const dots = items.slice(0, 10).map(it => '<i style="background:' + histColor(it) + '" title="' + esc(HIST_LABELS[it.status] || it.status) + '"></i>').join('');
+      const dots = items.slice(0, 10).map(it => '<i style="background:' + histColor(it) + '" title="' + esc(histStatusLabel(it)) + '"></i>').join('');
       cells += '<div class="cal-cell' + (k === t ? ' today' : '') + (k === histSelDay ? ' sel' : '') + '" onclick="showDay(\'' + k + '\')">' +
         '<div class="dn">' + d + '</div><div class="cal-dots">' + dots + '</div>' +
         (items.length > 10 ? '<div class="cal-more">+' + (items.length - 10) + '</div>' : '') + '</div>';
@@ -911,9 +933,9 @@ function showDay(k) {
       actions += '<button class="btn small" onclick="markRevDone(' + it.reminder_id + ')">did it ✓</button>';
     if (it.status === 'upcoming' || it.status === 'due')
       actions += '<a class="btn small ghost" style="text-decoration:none" target="_blank" href="' + gcalUrl(it) + '">+ GCal</a>';
-    return '<div class="fact"><span class="pill" style="color:' + histColor(it) + '">' + (HIST_LABELS[it.status] || it.status) + '</span>' +
+    return '<div class="fact"><span class="pill" style="color:' + histColor(it) + '">' + histStatusLabel(it) + '</span>' +
       '<span class="hint" style="min-width:42px">' + fmtTime(it.ts) + '</span>' +
-      '<span class="title">' + histIcon(it) + ' ' + esc(it.title) + revN + '</span>' + actions + '</div>';
+      '<span class="title">' + histIcon(it) + ' ' + linkTitle(it.title, it.url) + revN + '</span>' + actions + '</div>';
   }).join('') : '<div class="empty">nothing on this day</div>';
   if (histMode !== '3mo') redrawCal(); // refresh the selection highlight
 }
@@ -927,8 +949,9 @@ function gcalUrl(it) {
   const p = d => d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
   const st = new Date(it.ts * 1000), en = new Date(it.ts * 1000 + 1800000);
   const text = it.type === 'revision' ? 'Revise: ' + it.title : it.title;
+  const details = 'Scheduled by MitthuAI' + (it.url ? '\n' + it.url : '');
   return 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=' + encodeURIComponent(text) +
-    '&dates=' + p(st) + '/' + p(en) + '&details=' + encodeURIComponent('Scheduled by MitthuAI');
+    '&dates=' + p(st) + '/' + p(en) + '&details=' + encodeURIComponent(details);
 }
 
 function exportICS() { location.href = '/api/calendar.ics?token=' + encodeURIComponent(TOKEN); }

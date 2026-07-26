@@ -8,7 +8,7 @@ enum CalendarExport {
 
     static func ics(store: Store) -> String {
         let rows = store.db.query("""
-            SELECT r.id AS reminder_id, r.fire_ts, r.interval_idx, f.kind, f.title
+            SELECT r.id AS reminder_id, r.fire_ts, r.interval_idx, f.kind, f.title, f.detail
             FROM reminders r JOIN facts f ON f.id = r.fact_id
             WHERE r.status = 'pending' AND f.status = 'open'
             ORDER BY r.fire_ts ASC LIMIT 500
@@ -34,7 +34,7 @@ enum CalendarExport {
             let idx = r.int("interval_idx")
             let title = String(r.str("title").prefix(120))
             let summary: String
-            let detail: String
+            var detail: String
             if idx >= 0 {
                 summary = "Revise (\(idx + 1)/5): \(title)"
                 detail = "Spaced-repetition revision \(idx + 1) of 5, scheduled by MitthuAI."
@@ -45,13 +45,19 @@ enum CalendarExport {
                 summary = "Deadline: \(title)"
                 detail = "Deadline reminder scheduled by MitthuAI."
             }
+            // If the source is a video, link it so the event opens the video.
+            let link = r.str("detail")
+            let hasLink = link.hasPrefix("http://") || link.hasPrefix("https://")
+            if hasLink { detail += "\n" + link }
             lines += [
                 "BEGIN:VEVENT",
                 "UID:mitthuai-reminder-\(r.int("reminder_id"))@mitthuai.local",
                 "DTSTAMP:\(stamp)",
                 "DTSTART:\(fmt.string(from: fire))",
                 "DTEND:\(fmt.string(from: fire.addingTimeInterval(1800)))",
-                "SUMMARY:\(escape(summary))",
+                "SUMMARY:\(escape(summary))"]
+            if hasLink { lines.append("URL:\(link)") }
+            lines += [
                 "DESCRIPTION:\(escape(detail))",
                 "BEGIN:VALARM",
                 "ACTION:DISPLAY",
