@@ -84,8 +84,7 @@ final class Store {
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             kind TEXT, title TEXT, detail TEXT,
             due_ts REAL, created_ts REAL,
-            source TEXT, status TEXT DEFAULT 'open',
-            UNIQUE(kind, title)
+            source TEXT, status TEXT DEFAULT 'open'
         );
 
         CREATE TABLE IF NOT EXISTS reminders (
@@ -118,6 +117,36 @@ final class Store {
         // Degree") rarely say which lecture it was; `detail` already holds the
         // video URL, so the note needs its own column.
         db.exec("ALTER TABLE facts ADD COLUMN note TEXT DEFAULT '';")
+        // Accumulated seconds actually spent watching — half now, half later
+        // adds up on the same entry.
+        db.exec("ALTER TABLE facts ADD COLUMN watch_secs REAL DEFAULT 0;")
+
+        // Watched entries are now one-per-video (keyed by URL, 24h window),
+        // which the original UNIQUE(kind, title) forbids — an SPA portal keeps
+        // one title for every lecture. SQLite can't drop a constraint, so DBs
+        // created with it get the facts table rebuilt once, ids preserved.
+        // foreign_keys goes OFF first: with it ON, DROP TABLE implies a DELETE
+        // that would cascade into reminders.
+        let factsSQL = db.query("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'facts'")
+            .first?.str("sql") ?? ""
+        if factsSQL.contains("UNIQUE") {
+            db.exec("""
+            PRAGMA foreign_keys=OFF;
+            CREATE TABLE facts_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                kind TEXT, title TEXT, detail TEXT,
+                due_ts REAL, created_ts REAL,
+                source TEXT, status TEXT DEFAULT 'open',
+                done_ts REAL, note TEXT DEFAULT '', watch_secs REAL DEFAULT 0
+            );
+            INSERT INTO facts_new (id, kind, title, detail, due_ts, created_ts, source, status, done_ts, note, watch_secs)
+                SELECT id, kind, title, detail, due_ts, created_ts, source, status, done_ts, note, watch_secs FROM facts;
+            DROP TABLE facts;
+            ALTER TABLE facts_new RENAME TO facts;
+            PRAGMA foreign_keys=ON;
+            """)
+            print("MitthuAI: migrated the facts table — watched items are now unique per video, not per title")
+        }
         // Prior builds only ever used the Apple backend, so tag legacy vectors
         // accordingly to keep them visible to semantic search.
         db.exec("UPDATE embeddings SET model = 'apple-nl-en' WHERE model = '' OR model IS NULL;")
@@ -614,6 +643,39 @@ final class Store {
         return id
     }
 
+    /// Record (or extend) a watched video. One Brain entry per video per 24h:
+    /// matched by URL when we have one — SPA portals keep a single title
+    /// across every lecture, so the URL is the video's identity — falling back
+    /// to the title for browsers that expose no URL. A match inside the window
+    /// accumulates watch seconds; outside it, a re-watch is a fresh entry.
+    func recordWatch(title: String, url: String?, source: String, secs: Double,
+                     ts: Double) -> (id: Int64, isNew: Bool)? {
+        let windowStart = Date().timeIntervalSince1970 - 86400
+        let existing: [[String: Any]]
+        if let u = url, !u.isEmpty {
+            existing = db.query("""
+                SELECT id FROM facts WHERE kind = 'watched' AND detail = ? AND created_ts >= ?
+                ORDER BY created_ts DESC LIMIT 1
+                """, [u, windowStart])
+        } else {
+            existing = db.query("""
+                SELECT id FROM facts WHERE kind = 'watched' AND title = ? AND created_ts >= ?
+                ORDER BY created_ts DESC LIMIT 1
+                """, [title, windowStart])
+        }
+        if let row = existing.first {
+            let id = Int64(row.int("id"))
+            db.run("UPDATE facts SET watch_secs = watch_secs + ? WHERE id = ?", [max(0, secs), id])
+            return (id, false)
+        }
+        let id = db.run("""
+            INSERT INTO facts (kind, title, detail, due_ts, created_ts, source, status, watch_secs)
+            VALUES ('watched', ?, ?, NULL, ?, ?, 'open', ?)
+            """, [title, url ?? "", ts, source, max(0, secs)])
+        guard id > 0 else { return nil }
+        return (id, true)
+    }
+
     func addReminder(factId: Int64, fireTs: Double, intervalIdx: Int) {
         db.run("INSERT INTO reminders (fact_id, fire_ts, interval_idx, status) VALUES (?, ?, ?, 'pending')",
                [factId, fireTs, intervalIdx])
@@ -718,12 +780,13 @@ final class Store {
 
         // Watch events — the day the video/lecture was first seen.
         for f in db.query("""
-            SELECT id, title, detail, note, created_ts FROM facts
+            SELECT id, title, detail, note, created_ts, watch_secs FROM facts
             WHERE kind = 'watched' AND created_ts >= ? AND created_ts < ?
             ORDER BY created_ts ASC
             """, [from, to]) {
             items.append(withLink(["type": "watched", "fact_id": f.int("id"), "title": f.str("title"),
-                                   "ts": f.double("created_ts"), "status": "watched"], f))
+                                   "ts": f.double("created_ts"), "status": "watched",
+                                   "watch_secs": f.double("watch_secs")], f))
         }
 
         // Revision-ladder steps (interval_idx >= 0; idx -1 is a deadline nudge,

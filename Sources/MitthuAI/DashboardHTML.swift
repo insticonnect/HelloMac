@@ -705,6 +705,7 @@ function renderBrain() {
         const parts = [];
         if (f.note) parts.push('<span class="note">' + esc(f.note) + '</span>');
         if (f.created_ts) parts.push((f.kind === 'watched' ? 'watched ' : 'added ') + fmtDate(f.created_ts));
+        if (f.kind === 'watched' && f.watch_secs >= 30) parts.push(fmtDur(f.watch_secs) + ' total');
         second = parts.length ? '<span class="sub">' + parts.join(' · ') + '</span>' : '';
       }
       const noteBtn = editingNote === f.id ? '' :
@@ -1006,6 +1007,8 @@ function showDay(k) {
   document.getElementById('hist-day-items').innerHTML = items.length ? items.map(it => {
     const revN = (it.type === 'revision' && it.interval_idx >= 0)
       ? ' <span class="hint">revision ' + (it.interval_idx + 1) + ' of 5</span>' : '';
+    const wsecs = (it.type === 'watched' && it.watch_secs >= 30)
+      ? ' <span class="hint">' + fmtDur(it.watch_secs) + '</span>' : '';
     let actions = '';
     if (it.type === 'revision' && (it.status === 'due' || it.status === 'missed' || it.status === 'upcoming'))
       actions += '<button class="btn small" onclick="markRevDone(' + it.reminder_id + ')">did it ✓</button>';
@@ -1016,7 +1019,7 @@ function showDay(k) {
     const sub = it.note ? '<span class="sub"><span class="note">' + esc(it.note) + '</span></span>' : '';
     return '<div class="fact"><span class="pill" style="color:' + histColor(it) + '">' + histStatusLabel(it) + '</span>' +
       '<span class="hint" style="min-width:70px">' + fmtTime(it.ts) + '</span>' +
-      '<span class="title">' + histIcon(it) + ' ' + linkTitle(it.title, it.url) + revN + sub + '</span>' + actions + '</div>';
+      '<span class="title">' + histIcon(it) + ' ' + linkTitle(it.title, it.url) + revN + wsecs + sub + '</span>' + actions + '</div>';
   }).join('') : '<div class="empty">nothing on this day</div>';
   if (histMode !== '3mo') redrawCal(); // refresh the selection highlight
 }
