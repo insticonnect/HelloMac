@@ -14,6 +14,10 @@ final class Config {
     var relayURL = "wss://relay.mitthuai.com/agent"
     var pairingURL = "https://mitthuai.com"
     var port: UInt16 = 4789
+    var launchAtLogin = true      // start with macOS (on by default; see LoginItem)
+    /// Whether `launch_at_login` has ever been written. Lets LoginItem tell a
+    /// fresh install (opt in) from a user who deliberately switched it off.
+    var launchAtLoginStored = false
     var excludedApps: Set<String> = [
         "1Password", "1Password 7", "Keychain Access", "Passwords", "Bitwarden", "KeePassXC"
     ]
@@ -31,6 +35,10 @@ final class Config {
         if let u = store.setting("relay_url"), !u.isEmpty { relayURL = u }
         if let u = store.setting("pairing_url"), !u.isEmpty { pairingURL = u }
         if let p = UInt16(store.setting("port") ?? ""), p > 1024 { port = p }
+        if let v = store.setting("launch_at_login") {
+            launchAtLogin = v == "1"
+            launchAtLoginStored = true
+        }
         if let raw = store.setting("excluded_apps"), !raw.isEmpty {
             excludedApps = Set(raw.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty })
         }
@@ -47,6 +55,7 @@ final class Config {
         store.setSetting("relay_url", relayURL)
         store.setSetting("pairing_url", pairingURL)
         store.setSetting("port", String(port))
+        store.setSetting("launch_at_login", launchAtLogin ? "1" : "0")
         store.setSetting("excluded_apps", excludedApps.sorted().joined(separator: "\n"))
     }
 

@@ -73,7 +73,7 @@ export const STEPS = [
 export const DEMO = [
   {
     q: 'What did I do today?',
-    a: '3h 12m of focus across Xcode and Notion, 48m on YouTube, and 2 bills spotted on screen. Your longest stretch was 10:05–11:40 in Xcode.',
+    a: '3h 12m of focus across Xcode and Notion, 48m on YouTube, and 2 bills spotted on screen. Your longest stretch was 10:05 AM–11:40 AM in Xcode.',
   },
   {
     q: 'When did I watch that GPU video?',
