@@ -104,7 +104,7 @@ const server = http.createServer(async (req, res) => {
     if (!GOOGLE_CLIENT_ID) return send(res, 500, 'relay not configured (GOOGLE_CLIENT_ID)');
     return send(res, 200,
       `<html><body style="font-family:sans-serif;background:#0e0f13;color:#eee;padding:3em;text-align:center">
-       <h2>Connect this Mac to HelloMac</h2>
+       <h2>Connect this Mac to MitthuAI</h2>
        <p>Sign in to link this device. We only use Google for login — we never read your email.</p>
        <p style="margin-top:2em"><a href="/auth/google?device_id=${encodeURIComponent(deviceId)}"
           style="background:#7c6cff;color:#fff;padding:12px 22px;border-radius:10px;text-decoration:none">Sign in with Google</a></p>
@@ -134,7 +134,7 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200,
         `<html><body style="font-family:sans-serif;background:#0e0f13;color:#eee;padding:3em;text-align:center">
          <h2>✅ Connected as ${profile.email}</h2>
-         <p>You can return to the HelloMac app — this Mac will connect within a minute.</p>
+         <p>You can return to the MitthuAI app — this Mac will connect within a minute.</p>
          </body></html>`);
     } catch (e) {
       return send(res, 500, 'sign-in failed');

@@ -1,7 +1,7 @@
 import Foundation
 import Security
 
-/// All persistence for HelloMac: activity events, captured text chunks
+/// All persistence for MitthuAI: activity events, captured text chunks
 /// (with FTS5 + vector index), extracted facts, and reminders.
 final class Store {
     let db: SQLiteDB
@@ -10,11 +10,51 @@ final class Store {
     init() {
         let fm = FileManager.default
         let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        dataDir = appSupport.appendingPathComponent("HelloMac")
+        dataDir = appSupport.appendingPathComponent("MitthuAI")
         try? fm.createDirectory(at: dataDir, withIntermediateDirectories: true, attributes: nil)
-        db = SQLiteDB(path: dataDir.appendingPathComponent("hellomac.db").path)
+        Store.migrateLegacyDataIfNeeded(fm: fm, appSupport: appSupport, newDir: dataDir)
+        db = SQLiteDB(path: dataDir.appendingPathComponent("mitthuai.db").path)
         migrate()
         ensureToken()
+    }
+
+    /// One-time migration from the pre-rebrand HelloMac location.
+    ///
+    ///   ~/Library/Application Support/HelloMac/hellomac.db
+    ///     → ~/Library/Application Support/MitthuAI/mitthuai.db
+    ///
+    /// Runs only when the new database does not exist yet and the old one does,
+    /// so it is a no-op on fresh installs and on every launch after the first.
+    /// The old files are COPIED, not moved, so the previous install stays intact
+    /// as a fallback if anything goes wrong.
+    private static func migrateLegacyDataIfNeeded(fm: FileManager, appSupport: URL, newDir: URL) {
+        let newDB = newDir.appendingPathComponent("mitthuai.db")
+        guard !fm.fileExists(atPath: newDB.path) else { return }
+
+        let legacyDir = appSupport.appendingPathComponent("HelloMac")
+        let legacyDB = legacyDir.appendingPathComponent("hellomac.db")
+        guard fm.fileExists(atPath: legacyDB.path) else { return }
+
+        // Copy the main database plus its write-ahead log sidecars, so an
+        // un-checkpointed WAL doesn't silently drop the most recent activity.
+        let pairs = [("hellomac.db", "mitthuai.db"),
+                     ("hellomac.db-wal", "mitthuai.db-wal"),
+                     ("hellomac.db-shm", "mitthuai.db-shm")]
+        var copied = 0
+        for (old, new) in pairs {
+            let src = legacyDir.appendingPathComponent(old)
+            guard fm.fileExists(atPath: src.path) else { continue }
+            do {
+                try fm.copyItem(at: src, to: newDir.appendingPathComponent(new))
+                copied += 1
+            } catch {
+                print("MitthuAI migration: failed copying \(old): \(error)")
+            }
+        }
+
+        if copied > 0 {
+            print("MitthuAI migration: imported your HelloMac data (\(copied) file(s)) from \(legacyDir.path). The old folder was left untouched as a backup.")
+        }
     }
 
     private func migrate() {
@@ -686,7 +726,7 @@ final class Store {
     }
 
     func dbSizeBytes() -> Int64 {
-        let path = dataDir.appendingPathComponent("hellomac.db").path
+        let path = dataDir.appendingPathComponent("mitthuai.db").path
         let attrs = try? FileManager.default.attributesOfItem(atPath: path)
         return (attrs?[.size] as? Int64) ?? 0
     }

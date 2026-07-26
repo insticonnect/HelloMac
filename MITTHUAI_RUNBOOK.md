@@ -1,6 +1,6 @@
 # mitthuai — ship & operate runbook
 
-What it takes to let people download HelloMac from **mitthuai.com**, sign in with
+What it takes to let people download MitthuAI from **mitthuai.com**, sign in with
 Google (login only), and use it from Claude. No Stripe. No Gmail reading.
 
 ## Accounts & one-time setup
@@ -23,8 +23,8 @@ Google (login only), and use it from Claude. No Stripe. No Gmail reading.
    ```
 2. Notarize and staple:
    ```bash
-   xcrun notarytool submit build/HelloMac.dmg --apple-id <id> --team-id <TEAMID> --password <app-specific-pw> --wait
-   xcrun stapler staple build/HelloMac.app
+   xcrun notarytool submit build/MitthuAI.dmg --apple-id <id> --team-id <TEAMID> --password <app-specific-pw> --wait
+   xcrun stapler staple build/MitthuAI.app
    ```
 3. Host the `.dmg`; point `mitthuai.com/download` at it.
 4. (Optional) Add **Sparkle** for auto-updates.

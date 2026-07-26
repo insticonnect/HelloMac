@@ -1,6 +1,6 @@
-# HelloMac 🧠
+# MitthuAI 🧠
 
-Your Mac's memory. HelloMac lives in the menu bar, passively logs what you do
+Your Mac's memory. MitthuAI lives in the menu bar, passively logs what you do
 (apps, window titles, and the **text on your screen** via macOS accessibility),
 and turns it into:
 
@@ -13,9 +13,19 @@ and turns it into:
 **100% local.** SQLite on your disk, on-device Apple embeddings, server bound to
 `127.0.0.1` with a bearer token. No cloud, no telemetry.
 
-> **Naming:** the repo and the built app are `HelloMac`; the menu bar and
-> dashboard show the product name **MitthuAI** 🦜. Same app — don't be thrown
-> when the two names show up side by side.
+> **Naming:** the app is **MitthuAI** 🦜 everywhere — bundle, menu bar, dashboard
+> and data folder. Only the *GitHub repository* is still called `HelloMac`, so
+> the clone URL below keeps the old name.
+>
+> **Upgrading from a HelloMac build?** Your data moves itself. On first launch
+> MitthuAI copies `~/Library/Application Support/HelloMac/hellomac.db` to
+> `~/Library/Application Support/MitthuAI/mitthuai.db` (the old folder is left
+> in place as a backup) and carries your Keychain secrets over. Two manual
+> steps, because macOS sees a renamed bundle as a brand-new app:
+> 1. Re-grant **Accessibility** in System Settings → Privacy & Security, and
+>    remove the stale `HelloMac` entry there.
+> 2. Delete the old `build/HelloMac.app` if you kept a copy, so you don't launch
+>    both at once — two instances would fight over port 4789.
 
 ---
 
@@ -48,7 +58,7 @@ If you get `permission denied`, run `chmod +x build.sh` first.
 **4. Launch it:**
 
 ```bash
-open build/HelloMac.app
+open build/MitthuAI.app
 ```
 
 A 🦜 parrot icon appears in your menu bar — that's the app. There's no dock icon
@@ -56,7 +66,7 @@ and no window; everything happens from the menu bar and the dashboard.
 
 **5. Grant permissions (first run):**
 
-1. **Accessibility** (required) — System Settings → Privacy & Security → Accessibility → enable HelloMac. This is how window titles and on-screen text are read (the same API VoiceOver uses). **Quit and relaunch the app after granting**, or capture stays empty.
+1. **Accessibility** (required) — System Settings → Privacy & Security → Accessibility → enable MitthuAI. This is how window titles and on-screen text are read (the same API VoiceOver uses). **Quit and relaunch the app after granting**, or capture stays empty.
 2. **Automation** (optional) — prompted the first time a browser URL is read. Powers per-tab URLs in the timeline.
 3. **Notifications** (optional) — for revision/deadline reminders.
 
@@ -73,12 +83,12 @@ git pull
 ./build.sh
 ```
 
-Then quit the app from the menu bar (🦜 → Quit) and `open build/HelloMac.app`
+Then quit the app from the menu bar (🦜 → Quit) and `open build/MitthuAI.app`
 again. Quitting first is the safe order, since the rebuild replaces the binary
 the running app is using.
 
 **Your data survives updates.** Everything lives in
-`~/Library/Application Support/HelloMac/hellomac.db`, which the build never
+`~/Library/Application Support/MitthuAI/mitthuai.db`, which the build never
 touches — new columns and tables are migrated automatically on launch. Your
 access token, settings, and rules carry over too, so you don't need to
 reconnect Claude after an update.
@@ -88,7 +98,7 @@ reconnect Claude after an update.
 Click the 🦜 menu bar icon → **Open Dashboard** (it opens `http://localhost:4789/`
 with your access token). Tabs:
 
-- **Today** — active/idle time, focus-vs-multitasking score, tracked-event count, category-distribution donut, top-apps chart, and a full session timeline. Each timeline row has inline **Study / Entertainment / Work / Other** chips — tap one to teach HelloMac how to categorize that title.
+- **Today** — active/idle time, focus-vs-multitasking score, tracked-event count, category-distribution donut, top-apps chart, and a full session timeline. Each timeline row has inline **Study / Entertainment / Work / Other** chips — tap one to teach MitthuAI how to categorize that title.
 - **Search** — semantic + keyword search with date filters
 - **Brain** — open items (bills/deadlines/watched/notes), upcoming reminders
 - **History** — a revision calendar with Week / Month / 3-Month views (◀ ▶ to move between periods). Shows when you watched each video, which revisions you did, missed, or have coming up, with summary cards vs the previous period and a month-by-month comparison table + chart in the 3-month view. Click any day to see details and mark a revision **did it ✓**. **Export .ics** downloads the upcoming schedule for Google Calendar (Settings → Import & export), Apple Calendar, or Outlook; each upcoming item also has a one-click **+ GCal** link.
@@ -105,7 +115,7 @@ The Settings tab shows ready-to-copy commands with your token filled in:
 
 **Claude Code:**
 ```bash
-claude mcp add --transport http hellomac http://localhost:4789/mcp \
+claude mcp add --transport http mitthuai http://localhost:4789/mcp \
   --header "Authorization: Bearer <your-token>"
 ```
 
@@ -113,7 +123,7 @@ claude mcp add --transport http hellomac http://localhost:4789/mcp \
 ```json
 {
   "mcpServers": {
-    "hellomac": {
+    "mitthuai": {
       "command": "npx",
       "args": ["mcp-remote", "http://localhost:4789/mcp",
                "--header", "Authorization: Bearer <your-token>"]
@@ -157,7 +167,7 @@ The MCP server also advertises a retrieval **playbook** (via the `initialize`
 
 ## Privacy
 
-- Everything stays in `~/Library/Application Support/HelloMac/hellomac.db`
+- Everything stays in `~/Library/Application Support/MitthuAI/mitthuai.db`
 - Server binds `127.0.0.1` only; every request needs the bearer token
 - Password managers are excluded by default (editable list); secure text fields and private/incognito windows are never read
 - Pause anytime from the menu bar; delete any date range from Settings

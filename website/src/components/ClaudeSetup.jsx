@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import Reveal from './Reveal.jsx'
 
-const SNIPPET = `claude mcp add --transport http hellomac \\
+const SNIPPET = `claude mcp add --transport http mitthuai \\
   http://localhost:4789/mcp \\
   --header "Authorization: Bearer <your-token>"`
 

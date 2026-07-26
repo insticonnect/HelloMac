@@ -5,7 +5,7 @@ import CryptoKit
 /// dedupes it, embeds it, and runs the fact extractors over it.
 final class ContentCapture {
     private let store: Store
-    private let queue = DispatchQueue(label: "com.hellomac.capture", qos: .utility)
+    private let queue = DispatchQueue(label: "com.mitthuai.capture", qos: .utility)
     private var timer: Timer?
     private var lastHash = ""
 

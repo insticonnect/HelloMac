@@ -5,17 +5,17 @@
     <key>CFBundleDevelopmentRegion</key>
     <string>en</string>
     <key>CFBundleExecutable</key>
-    <string>HelloMac</string>
+    <string>MitthuAI</string>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>CFBundleIdentifier</key>
-    <string>com.hellomac.app</string>
+    <string>com.mitthuai.app</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
-    <string>HelloMac</string>
+    <string>MitthuAI</string>
     <key>CFBundleDisplayName</key>
-    <string>HelloMac</string>
+    <string>MitthuAI</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
@@ -27,7 +27,7 @@
     <key>LSUIElement</key>
     <true/>
     <key>NSAppleEventsUsageDescription</key>
-    <string>HelloMac reads the current browser tab URL to build your activity timeline. Everything stays on this Mac.</string>
+    <string>MitthuAI reads the current browser tab URL to build your activity timeline. Everything stays on this Mac.</string>
     <key>NSHighResolutionCapable</key>
     <true/>
 </dict>

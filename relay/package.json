@@ -1,7 +1,7 @@
 {
   "name": "mitthuai-relay",
   "version": "1.0.0",
-  "description": "Tunnel relay for HelloMac / mitthuai — routes Claude MCP calls to a user's paired Mac. Google Sign-In for identity only; no email is read, no user memory is stored.",
+  "description": "Tunnel relay for MitthuAI / mitthuai — routes Claude MCP calls to a user's paired Mac. Google Sign-In for identity only; no email is read, no user memory is stored.",
   "type": "module",
   "main": "server.js",
   "scripts": {

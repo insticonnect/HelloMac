@@ -40,7 +40,7 @@ final class RelayClient: NSObject, URLSessionWebSocketDelegate {
 
     func start() {
         guard RelayClient.isConfigured else {
-            print("HelloMac Relay: not configured (sign in from the dashboard to enable Claude web access).")
+            print("MitthuAI Relay: not configured (sign in from the dashboard to enable Claude web access).")
             return
         }
         running = true
@@ -135,8 +135,8 @@ final class RelayClient: NSObject, URLSessionWebSocketDelegate {
     func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask,
                     didOpenWithProtocol proto: String?) {
         reconnectDelay = 2 // reset backoff on a good connection
-        sendJSON(["type": "register", "device_id": deviceId(), "app": "hellomac", "version": "1.0"])
-        print("HelloMac Relay: connected to \(Config.shared.relayURL)")
+        sendJSON(["type": "register", "device_id": deviceId(), "app": "mitthuai", "version": "1.0"])
+        print("MitthuAI Relay: connected to \(Config.shared.relayURL)")
     }
 
     func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask,
