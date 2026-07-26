@@ -21,11 +21,15 @@ final class Tracker: ObservableObject {
     private var lastIsIdle = false
     /// Playback evidence collected during the current window session.
     private var sessionSignals = Extractors.PlayerSignals()
-    /// Watch time per (app, title), surviving tab-aways: flicking to WhatsApp
-    /// mid-lecture doesn't reset the clock — the pieces add up. An entry dies
-    /// after 10 minutes out of sight (the rules engine uses the same ±10 min).
+    /// Watch time per video, surviving tab-aways: flicking to WhatsApp
+    /// mid-lecture doesn't reset the clock — the pieces add up. Keyed by URL
+    /// when there is one (an SPA portal keeps one title for every lecture),
+    /// else by title. `credited` is how much of `total` has already been
+    /// written to the Brain entry, so repeated session closes with a growing
+    /// total never double-count. An entry dies after 10 minutes out of sight
+    /// (the rules engine uses the same ±10 min).
     private var dwell: [String: (total: Double, signals: Extractors.PlayerSignals,
-                                 firstTs: Double, lastSeen: Double)] = [:]
+                                 firstTs: Double, lastSeen: Double, credited: Double)] = [:]
 
     private let idleThreshold: TimeInterval = 300
 
@@ -106,8 +110,23 @@ final class Tracker: ObservableObject {
         }
     }
 
+    /// Called from the capture queue with the freshest browser URL, so it hops
+    /// to the main thread where session state lives. A changed URL under an
+    /// unchanged title is an SPA moving to the next lecture: close the session
+    /// (still carrying the OLD url) so watch time lands on the right video.
+    /// Compared as full strings — fragment-routing SPAs ("/#/lesson/12") need
+    /// the fragment.
     func noteURL(_ url: String?) {
-        lastURL = url
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            if let old = self.lastURL, let new = url, !old.isEmpty, !new.isEmpty,
+               old != new, !self.lastIsIdle, !self.lastAppName.isEmpty, self.lastAppName != "Paused" {
+                self.saveCurrentEvent()
+                self.sessionSignals = Extractors.PlayerSignals()
+                self.lastEventStart = Date()
+            }
+            self.lastURL = url
+        }
     }
 
     /// Playback evidence from the latest content capture, accumulated for as
@@ -131,25 +150,29 @@ final class Tracker: ObservableObject {
                           start: lastEventStart, end: now,
                           isIdle: lastIsIdle)
 
-        // Accumulate watch time for this window. Detection judges the total —
+        // Accumulate watch time for this video. Detection judges the total —
         // not one continuous stretch — so tab-switching away and back keeps
-        // counting; 120s is the floor detectWatched could possibly accept, and
-        // its evidence-strength thresholds still apply to the total.
+        // counting; 60s is the floor detectWatched could possibly accept, and
+        // its evidence-strength thresholds still apply to the total. Only the
+        // uncredited slice is handed over, so the Brain entry's minutes grow
+        // by exactly what was newly watched.
         if !lastIsIdle && !lastWindowTitle.isEmpty {
             let nowTs = now.timeIntervalSince1970
-            let key = lastAppName + "|" + lastWindowTitle
+            let key = lastAppName + "|" + lastWindowTitle + "|" + (lastURL ?? "")
             var d = dwell[key] ?? (0, Extractors.PlayerSignals(),
-                                   lastEventStart.timeIntervalSince1970, nowTs)
+                                   lastEventStart.timeIntervalSince1970, nowTs, 0)
             d.total += duration
             d.signals = d.signals.merging(sessionSignals)
             d.lastSeen = nowTs
+            if d.total >= 60 {
+                let recorded = Extractors.detectWatched(app: lastAppName, title: lastWindowTitle,
+                                                        url: lastURL, ts: d.firstTs,
+                                                        duration: d.total, newSecs: d.total - d.credited,
+                                                        signals: d.signals, store: store)
+                if recorded { d.credited = d.total }
+            }
             dwell[key] = d
             dwell = dwell.filter { nowTs - $0.value.lastSeen < 600 }
-            if d.total >= 60 {
-                Extractors.detectWatched(app: lastAppName, title: lastWindowTitle,
-                                         url: lastURL, ts: d.firstTs,
-                                         duration: d.total, signals: d.signals, store: store)
-            }
         }
     }
 

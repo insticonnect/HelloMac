@@ -311,11 +311,16 @@ enum Extractors {
         if _detectionLog.count > 20 { _detectionLog.removeFirst(_detectionLog.count - 20) }
     }
 
-    /// Called when a window session ends. `duration` is how long that one title
-    /// held the screen; `signals` is the playback evidence gathered while it did.
+    /// Called when a window session ends. `duration` is the cumulative watch
+    /// time for this video (judged against the thresholds); `newSecs` is the
+    /// not-yet-recorded slice of it, added to the Brain entry's total. Returns
+    /// whether a watch was recorded, so the caller can mark those seconds
+    /// credited.
+    @discardableResult
     static func detectWatched(app: String, title: String, url: String?, ts: Double,
-                              duration: Double, signals: PlayerSignals, store: Store) {
-        guard !title.isEmpty else { return }
+                              duration: Double, newSecs: Double, signals: PlayerSignals,
+                              store: Store) -> Bool {
+        guard !title.isEmpty else { return false }
         let haystack = (title + " " + app + " " + (url ?? "")).lowercased()
 
         // With both text and URL capture switched off there is no evidence to
@@ -325,31 +330,38 @@ enum Extractors {
         let why = reasons.joined(separator: ", ")
         guard blind ? knownVideoSource(haystack) : (score >= 3 && direct) else {
             if score > 0 { logDecision("not a video (score \(score): \(why)) — \(title.prefix(60))") }
-            return
+            return false
         }
 
         // Strong evidence is trusted sooner; a weak match still has to hold the
         // screen for the old five minutes before it counts as watched.
         guard duration >= (score >= 5 ? 60 : 300) else {
             logDecision("video seen but only \(Int(duration))s (score \(score): \(why)) — \(title.prefix(60))")
-            return
+            return false
         }
 
-        let cleanTitle = title
+        let cleanTitle = String(title
             .replacingOccurrences(of: " - YouTube", with: "")
             .replacingOccurrences(of: " – YouTube", with: "")
-        guard let factId = store.addFact(kind: "watched", title: String(cleanTitle.prefix(140)),
-                                         detail: url ?? "", dueTs: nil, source: app) else { return }
-        logDecision("watched (score \(score): \(why)) — \(cleanTitle.prefix(60))")
-
-        // Study material auto-enrolls in the revision ladder (configurable).
-        // Anything a user rule files under Study counts as well — that's the
-        // escape hatch for a site none of the built-in lists know about.
-        let isStudy = isStudyMaterial(haystack)
-            || store.categoryFor(app: app, title: title, url: url) == "Study"
-        if Config.shared.autoRevise && isStudy {
-            store.addRevisionLadder(factId: factId, baseTs: ts)
+            .prefix(140))
+        guard let (factId, isNew) = store.recordWatch(title: cleanTitle, url: url, source: app,
+                                                      secs: newSecs, ts: ts) else { return false }
+        if isNew {
+            logDecision("watched (score \(score): \(why)) — \(cleanTitle.prefix(60))")
+            // Study material auto-enrolls in the revision ladder (configurable).
+            // Anything a user rule files under Study counts as well — that's
+            // the escape hatch for a site none of the built-in lists know
+            // about. Only a NEW entry enrolls: a same-day continuation must
+            // not reset the 1/3/7/14/30 ladder.
+            let isStudy = isStudyMaterial(haystack)
+                || store.categoryFor(app: app, title: title, url: url) == "Study"
+            if Config.shared.autoRevise && isStudy {
+                store.addRevisionLadder(factId: factId, baseTs: ts)
+            }
+        } else if newSecs >= 30 {
+            logDecision("watch time +\(Int(newSecs / 60))m \(Int(newSecs) % 60)s — \(cleanTitle.prefix(60))")
         }
+        return true
     }
 
     /// Word-boundary match, for markers too short to use as substrings.
