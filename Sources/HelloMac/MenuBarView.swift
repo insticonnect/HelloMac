@@ -31,9 +31,9 @@ struct MenuBarView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Image(systemName: "brain.head.profile")
-                    .foregroundColor(.purple)
-                Text("HelloMac").font(.headline)
+                Text("🦜")
+                    .font(.headline)
+                Text("MitthuAI").font(.headline)
                 Spacer()
                 Circle()
                     .fill(model.paused ? Color.orange : Color.green)
