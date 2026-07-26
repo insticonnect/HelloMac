@@ -340,6 +340,8 @@ enum DashboardHTML {
     <p class="hint" style="margin-bottom:10px">MitthuAI spots a playing video on its own — the player's timecode and controls on screen, /watch-style links, the display staying awake — so most sites work with nothing listed here. Add a domain or keyword to force it anyway, e.g. your college portal. One per line.</p>
     <textarea id="set-video" rows="4" placeholder="learn.mycollege.edu"></textarea>
     <div class="row" style="margin-top:10px"><button class="btn" onclick="saveSettings()">Save</button></div>
+    <p class="hint" style="margin-top:14px;margin-bottom:6px"><b>Recent video detection</b> — every decision with its score and reasons, so a missed lecture explains itself:</p>
+    <div id="detection-log" class="hint" style="white-space:pre-wrap;font-family:ui-monospace,monospace;font-size:11px">–</div>
   </div>
   <div class="section">
     <h2>Excluded apps (never captured)</h2>
@@ -990,6 +992,9 @@ async function loadSettings() {
   document.getElementById('openai-status').textContent = s.openai_key_set ? 'A key is saved in Keychain.' : 'No key saved.';
   document.getElementById('set-excluded').value = s.excluded_apps.join('\n');
   document.getElementById('set-video').value = (s.video_sources || []).join('\n');
+  document.getElementById('detection-log').textContent =
+    (s.detection_log && s.detection_log.length) ? s.detection_log.slice().reverse().join('\n')
+                                                : 'nothing decided yet — play something for a minute';
   document.getElementById('q-mode').textContent = s.embeddings ? 'semantic + keyword search' : 'keyword search only';
   const mcp = 'claude mcp add --transport http mitthuai http://localhost:' + s.port + '/mcp --header "Authorization: Bearer ' + s.token + '"';
   document.getElementById('mcp-code').textContent = mcp;
