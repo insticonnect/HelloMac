@@ -21,6 +21,9 @@ final class Config {
     var excludedApps: Set<String> = [
         "1Password", "1Password 7", "Keychain Access", "Passwords", "Bitwarden", "KeePassXC"
     ]
+    /// Extra sites/keywords that always count as video, on top of what the
+    /// detector works out on its own. One per line in Settings.
+    var videoSources: [String] = []
 
     private weak var store: Store?
 
@@ -38,6 +41,9 @@ final class Config {
         if let v = store.setting("launch_at_login") {
             launchAtLogin = v == "1"
             launchAtLoginStored = true
+        }
+        if let raw = store.setting("video_sources"), !raw.isEmpty {
+            videoSources = raw.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
         }
         if let raw = store.setting("excluded_apps"), !raw.isEmpty {
             excludedApps = Set(raw.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty })
@@ -57,6 +63,7 @@ final class Config {
         store.setSetting("port", String(port))
         store.setSetting("launch_at_login", launchAtLogin ? "1" : "0")
         store.setSetting("excluded_apps", excludedApps.sorted().joined(separator: "\n"))
+        store.setSetting("video_sources", videoSources.joined(separator: "\n"))
     }
 
     func isExcluded(app: String) -> Bool {

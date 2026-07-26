@@ -103,12 +103,46 @@ reconnect Claude after an update.
 Click the 🦜 menu bar icon → **Open Dashboard** (it opens `http://localhost:4789/`
 with your access token). Tabs:
 
-- **Today** — active/idle time, focus-vs-multitasking score, tracked-event count, category-distribution donut, top-apps chart, and a full session timeline. Each timeline row has inline **Study / Entertainment / Work / Other** chips — tap one to teach MitthuAI how to categorize that title.
+- **Today** — active/idle time, focus-vs-multitasking score, tracked-event count, category-distribution donut, top-apps chart, and a full session timeline. Each timeline row has inline **Study / Entertainment / Work / Other** chips — tap one to teach MitthuAI how to categorize that title. Switching tabs inside one app stays a single row, shown under the tab you spent the most time on with a **· N tabs** marker (hover for the full list); switching *apps* always starts a new row, and every raw switch is still stored.
 - **Search** — semantic + keyword search with date filters
 - **Brain** — open items (bills/deadlines/watched/notes), upcoming reminders. Add your own items with a due **date and time** (defaults to 9:00 AM); watched-video titles link straight to the video. Marking an item **done** here also shows it as done in the History calendar — even items without a due date land on the day you completed them.
 - **History** — a revision calendar with Week / Month / 3-Month views (◀ ▶ to move between periods). Shows when you watched each video, which revisions you did, missed, or have coming up, with summary cards vs the previous period and a month-by-month comparison table + chart in the 3-month view. Video titles are clickable everywhere — reopen the video straight from the calendar to rewatch or revise. Click any day to see details and mark a revision **did it ✓**. **Export .ics** downloads the upcoming schedule for Google Calendar (Settings → Import & export), Apple Calendar, or Outlook — events carry the video link; each upcoming item also has a one-click **+ GCal** link.
 - **Rules** — create categorization rules (app + title-contains → category). A new rule re-tags matching history immediately, including same-title activity within ±10 minutes so a video you flicked away from and back to lands in one bucket. Delete any rule to re-categorize affected activity.
-- **Settings** — pause, open at login, excluded apps, capture toggles, data purge, MCP setup
+- **Settings** — pause, open at login, video sources, excluded apps, capture toggles, data purge, MCP setup
+
+### How a video gets spotted
+
+MitthuAI doesn't rely on a list of famous sites — a lecture on your college
+portal is caught the same way a YouTube video is. When a window has held the
+screen long enough, it weighs signals it already collects:
+
+| Signal | Weight |
+|---|---|
+| A player timecode on screen (`12:34 / 45:07`) | 3 |
+| A native player app (VLC, IINA, QuickTime…) | 3 |
+| Player controls — play/pause with fullscreen, mute or speed | 2 |
+| The display being held awake (what playback does) | 2 |
+| A video-shaped link (`/watch`, `/lecture`, `/embed/`…) | 2 |
+| A known video site, built-in list or your own | 2 |
+
+Three points make it a video — including at least one signal from the window
+itself (a timecode, controls, a player app, a video link), so a video call
+keeping the display awake can't turn plain browsing into "watched". Strong
+evidence (5+) counts after 2 minutes, anything weaker still needs the full
+5 minutes — so a page you left open isn't a video, and neither is the YouTube
+homepage you never pressed play on. Tab-switching away doesn't reset the
+clock: watch time for a title keeps adding up across gaps of up to 10 minutes.
+
+It then enrols in the **1/3/7/14/30-day revision ladder** if it looks like study
+material: a learning host (`.edu`, `.ac.in`, Moodle, Canvas, Classroom, NPTEL,
+Coursera…), a title that reads like coursework (lecture, module, chapter, week,
+lab, exam…), or anything one of your own rules files under **Study**. Turn the
+auto-enrolment off with *Auto spaced-repetition* in Settings.
+
+Missing a site? Add its domain under **Settings → Video sources** and it always
+counts. Note that browser URLs come from Apple Events, which only Safari, Chrome,
+Brave, Edge, Vivaldi and Arc support — in Firefox detection leans on the
+on-screen signals instead.
 
 ### Categories & focus score
 
