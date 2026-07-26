@@ -10,7 +10,7 @@ enum DashboardHTML {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>HelloMac — Memory</title>
+<title>MitthuAI — Memory</title>
 <style>
   :root {
     --bg: #0e0f13; --panel: #16181f; --panel2: #1d2029; --line: #262a36;
@@ -36,16 +36,18 @@ enum DashboardHTML {
   .card .v { font-size: 24px; font-weight: 700; }
   .section { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; margin-bottom: 18px; }
   .section h2 { font-size: 14px; margin-bottom: 12px; color: var(--dim); text-transform: uppercase; letter-spacing: .6px; }
+  .sechead { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .sechead h2 { margin-bottom: 12px; }
   .bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
   .bar-row .name { width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .bar-row .bar { flex: 1; height: 10px; background: var(--panel2); border-radius: 5px; overflow: hidden; }
   .bar-row .bar > div { height: 100%; background: linear-gradient(90deg, var(--accent), #a08bff); border-radius: 5px; }
   .bar-row .time { width: 70px; text-align: right; color: var(--dim); font-variant-numeric: tabular-nums; }
-  .sess { display: flex; gap: 12px; padding: 9px 4px; border-bottom: 1px solid var(--line); }
+  .sess { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 10px 4px; border-bottom: 1px solid var(--line); }
   .sess:last-child { border-bottom: none; }
   .sess .t { color: var(--dim); font-variant-numeric: tabular-nums; white-space: nowrap; }
   .sess .app { font-weight: 600; white-space: nowrap; }
-  .sess .title { color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+  .sess .title { color: var(--dim); flex: 1 1 180px; min-width: 120px; overflow-wrap: anywhere; }
   .sess .dur { color: var(--accent2); white-space: nowrap; font-variant-numeric: tabular-nums; }
   .sess.idle { opacity: .45; }
   input[type=text], input[type=date], textarea {
@@ -78,6 +80,12 @@ enum DashboardHTML {
   code.inline { background: var(--panel2); padding: 2px 7px; border-radius: 6px; font: 12px ui-monospace, Menlo, monospace; word-break: break-all; }
   .empty { color: var(--dim); padding: 18px 0; text-align: center; }
   .hidden { display: none; }
+  select { background: var(--panel2); border: 1px solid var(--line); color: var(--text); border-radius: 10px; padding: 10px 14px; font: inherit; font-weight: 600; cursor: pointer; }
+  select:focus { outline: none; border-color: var(--accent); }
+  .chartbox { width: 100%; overflow-x: auto; }
+  .chartbox svg { display: block; min-width: 320px; }
+  .chartlegend { display: flex; gap: 18px; margin-bottom: 10px; font-size: 12px; color: var(--dim); }
+  .chartlegend i.sw { display: inline-block; width: 11px; height: 11px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
   .cols2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 18px; }
   .cols2 .section { margin-bottom: 0; }
   .donut-wrap { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; justify-content: center; }
@@ -93,22 +101,59 @@ enum DashboardHTML {
   table.rules tr:last-child td { border-bottom: none; }
   table.rules .any { color: var(--dim); }
   .chip { display: inline-block; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 20px; background: var(--panel2); color: #cdb9ff; }
-  .catpick { display: inline-flex; gap: 4px; margin-left: 8px; }
+  .catpick { display: inline-flex; gap: 4px; flex-shrink: 0; white-space: nowrap; }
   .catpick button { background: var(--panel2); border: 1px solid var(--line); color: var(--dim); font-size: 11px; padding: 2px 8px; border-radius: 12px; cursor: pointer; }
   .catpick button:hover { color: var(--text); border-color: var(--accent); }
   .catpick button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
   .del { color: var(--danger); background: none; border: none; cursor: pointer; font: inherit; font-weight: 600; }
-  @media (max-width: 760px) { .cols2 { grid-template-columns: 1fr; } .rule-form { grid-template-columns: 1fr 1fr; } }
-  @media (max-width: 640px) { .sess .title { display: none; } .bar-row .name { width: 110px; } }
+  .seg { display: inline-flex; background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 3px; gap: 2px; }
+  .seg button { background: none; border: none; color: var(--dim); font: inherit; font-weight: 600; padding: 6px 14px; border-radius: 8px; cursor: pointer; }
+  .seg button.on { background: var(--accent); color: #fff; }
+  .callegend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 11px; color: var(--dim); margin-bottom: 12px; }
+  .callegend i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; }
+  .cal-head { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin-bottom: 6px; }
+  .cal-head div { text-align: center; font-size: 11px; color: var(--dim); text-transform: uppercase; }
+  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+  .cal-cell { background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; min-height: 74px; padding: 6px 8px; cursor: pointer; }
+  .cal-cell:hover { border-color: var(--accent); }
+  .cal-cell.blank { background: none; border: none; cursor: default; }
+  .cal-cell.today { border-color: var(--accent2); }
+  .cal-cell.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .cal-cell .dn, .wk-col .dn { font-size: 12px; font-weight: 700; color: var(--dim); margin-bottom: 5px; }
+  .cal-cell.today .dn, .wk-col.today .dn { color: var(--accent2); }
+  .cal-dots { display: flex; flex-wrap: wrap; gap: 3px; }
+  .cal-dots i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .cal-more { font-size: 10px; color: var(--dim); margin-top: 3px; }
+  .wk-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; }
+  .wk-col { background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 8px; min-height: 130px; cursor: pointer; overflow: hidden; }
+  .wk-col:hover { border-color: var(--accent); }
+  .wk-col.today { border-color: var(--accent2); }
+  .wk-col.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .hchip { display: flex; align-items: center; gap: 5px; font-size: 11px; margin-bottom: 5px; color: #c6cad6; }
+  .hchip i { flex: none; width: 8px; height: 8px; border-radius: 50%; }
+  .hchip span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mini3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .mini-cal .mc-title { text-align: center; font-weight: 700; font-size: 13px; margin-bottom: 8px; }
+  .mini-cal .cal-head { gap: 2px; margin-bottom: 2px; }
+  .mini-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+  .mini-cell { aspect-ratio: 1; border-radius: 5px; background: var(--panel2); cursor: pointer; font-size: 10px; color: var(--dim); display: flex; align-items: center; justify-content: center; }
+  .mini-cell:hover { outline: 1px solid var(--accent); }
+  .mini-cell.blank { background: none; cursor: default; }
+  .mini-cell.blank:hover { outline: none; }
+  .mini-cell.today { outline: 1px solid var(--accent2); color: var(--accent2); font-weight: 700; }
+  @media (max-width: 760px) { .cols2 { grid-template-columns: 1fr; } .rule-form { grid-template-columns: 1fr 1fr; } .mini3 { grid-template-columns: 1fr; } .wk-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 640px) { .bar-row .name { width: 110px; } .cal-cell { min-height: 52px; padding: 4px 5px; } }
 </style>
 </head>
 <body>
 <header>
-  <h1>Hello<span>Mac</span></h1>
+  <h1>🦜 Mitthu<span>AI</span></h1>
   <nav>
     <button id="tab-today" class="active" onclick="show('today')">Today</button>
+    <button id="tab-trends" onclick="show('trends')">Trends</button>
     <button id="tab-search" onclick="show('search')">Search</button>
     <button id="tab-brain" onclick="show('brain')">Brain</button>
+    <button id="tab-history" onclick="show('history')">History</button>
     <button id="tab-rules" onclick="show('rules')">Rules</button>
     <button id="tab-settings" onclick="show('settings')">Settings</button>
   </nav>
@@ -138,9 +183,37 @@ enum DashboardHTML {
     </div>
     <div class="section"><h2>Top applications</h2><div id="top-apps"><div class="empty">no data yet</div></div></div>
   </div>
-  <div class="section"><h2>Timeline</h2>
-    <p class="hint" style="margin-bottom:8px">Tap a category chip on any row to teach HelloMac — it re-tags that title everywhere, including activity within ±10 min.</p>
+  <div class="section">
+    <div class="sechead"><h2>Timeline</h2><button class="btn small ghost" id="sortbtn" onclick="toggleSort()">Newest first ↓</button></div>
+    <p class="hint" style="margin-bottom:8px">Tap a category chip on any row to teach MitthuAI — it re-tags that title everywhere, including activity within ±10 min.</p>
     <div id="timeline"><div class="empty">no activity logged for this day</div></div>
+  </div>
+</div>
+
+<div id="view-trends" class="hidden">
+  <div class="row" style="margin-bottom:16px">
+    <select id="range" onchange="loadTrends()">
+      <option value="7">This week</option>
+      <option value="30">This month</option>
+      <option value="90">Last 3 months</option>
+    </select>
+  </div>
+  <div class="grid">
+    <div class="card"><div class="k" id="t-active-k">Active time</div><div class="v" id="t-active">–</div><div class="hint" id="t-active-d">&nbsp;</div></div>
+    <div class="card"><div class="k" id="t-focus-k">Focus score</div><div class="v" id="t-focus" style="color:var(--accent2)">–</div><div class="hint" id="t-focus-d">&nbsp;</div></div>
+    <div class="card"><div class="k" id="t-idle-k">Idle time</div><div class="v" id="t-idle">–</div><div class="hint" id="t-idle-d">&nbsp;</div></div>
+  </div>
+  <div class="cols2">
+    <div class="section"><h2>Focus vs multitasking trend</h2><div id="chart-line" class="chartbox"><div class="empty">no data</div></div></div>
+    <div class="section"><h2>Daily activity pattern</h2>
+      <div class="chartlegend"><span><i class="sw" style="background:#5b8def"></i>Active (min)</span><span><i class="sw" style="background:#4a4f5e"></i>Away (min)</span></div>
+      <div id="chart-bars" class="chartbox"><div class="empty">no data</div></div>
+    </div>
+  </div>
+  <div class="section"><h2>Category summary</h2>
+    <div class="donut-wrap"><svg id="donut2" viewBox="0 0 200 200" width="200" height="200"></svg>
+      <div id="donut-legend2" class="legend"></div>
+    </div>
   </div>
 </div>
 
@@ -170,6 +243,50 @@ enum DashboardHTML {
   </div>
   <div class="section"><h2>Open items</h2><div id="facts"><div class="empty">nothing here yet — bills and deadlines you see on screen appear automatically</div></div></div>
   <div class="section"><h2>Upcoming reminders</h2><div id="reminders"><div class="empty">no reminders scheduled</div></div></div>
+</div>
+
+<div id="view-history" class="hidden">
+  <div class="row" style="margin-bottom:16px; flex-wrap:wrap">
+    <div class="seg" id="hist-seg">
+      <button data-m="week" class="on" onclick="setHistMode('week')">Week</button>
+      <button data-m="month" onclick="setHistMode('month')">Month</button>
+      <button data-m="3mo" onclick="setHistMode('3mo')">3 Months</button>
+    </div>
+    <button class="btn ghost" onclick="histShift(-1)">&larr;</button>
+    <b id="hist-label" style="min-width:170px;text-align:center"></b>
+    <button class="btn ghost" onclick="histShift(1)">&rarr;</button>
+    <button class="btn ghost" onclick="histToday()">Today</button>
+    <span style="flex:1"></span>
+    <button class="btn ghost" onclick="exportICS()">📅 Export .ics</button>
+  </div>
+  <div class="grid">
+    <div class="card"><div class="k">Videos watched</div><div class="v" id="h-watched" style="color:#22d3ee">–</div><div class="hint" id="h-watched-d">&nbsp;</div></div>
+    <div class="card"><div class="k">Revisions done</div><div class="v" id="h-done" style="color:var(--accent2)">–</div><div class="hint" id="h-done-d">&nbsp;</div></div>
+    <div class="card"><div class="k">Revisions missed</div><div class="v" id="h-missed" style="color:var(--danger)">–</div><div class="hint" id="h-missed-d">&nbsp;</div></div>
+    <div class="card"><div class="k">Completion rate</div><div class="v" id="h-rate">–</div><div class="hint" id="h-rate-d">&nbsp;</div></div>
+  </div>
+  <div class="section">
+    <div class="sechead"><h2 id="hist-cal-title">Calendar</h2></div>
+    <div class="callegend">
+      <span><i style="background:#22d3ee"></i>Watched</span>
+      <span><i style="background:#4fd1a5"></i>Revised</span>
+      <span><i style="background:#ff6b6b"></i>Missed</span>
+      <span><i style="background:#ffb454"></i>Due today</span>
+      <span><i style="background:#7c6cff"></i>Upcoming</span>
+      <span><i style="background:#5b6274"></i>Closed early</span>
+    </div>
+    <div id="hist-cal"><div class="empty">loading…</div></div>
+    <p class="hint" style="margin-top:10px">Click any day to see exactly what happened — and mark revisions as done.</p>
+  </div>
+  <div class="section hidden" id="hist-day-box">
+    <h2 id="hist-day-title">Day</h2>
+    <div id="hist-day-items"></div>
+  </div>
+  <div class="section hidden" id="hist-cmp-box"><h2>Month-by-month comparison</h2><div id="hist-cmp"></div></div>
+  <div class="section">
+    <h2>Google Calendar sync</h2>
+    <p class="hint">“Export .ics” downloads your entire upcoming revision &amp; deadline schedule as a standard calendar file. Import it at calendar.google.com → ⚙ Settings → Import &amp; export → Import (Apple Calendar and Outlook open the file directly). Individual upcoming items also have a “+ GCal” button in the day view to add just that one event. Everything stays local — nothing is sent anywhere.</p>
+  </div>
 </div>
 
 <div id="view-rules" class="hidden">
@@ -217,7 +334,7 @@ enum DashboardHTML {
   </div>
   <div class="section">
     <h2>Claude.ai web access (mitthuai account)</h2>
-    <p class="hint" style="margin-bottom:8px">Sign in with your mitthuai account to use HelloMac from Claude on the web. Login happens on mitthuai.com (Google Sign-In, identity only — we never read your email). Your memory stays on this Mac; the account only lets Claude reach it through a secure tunnel.</p>
+    <p class="hint" style="margin-bottom:8px">Sign in with your mitthuai account to use MitthuAI from Claude on the web. Login happens on mitthuai.com (Google Sign-In, identity only — we never read your email). Your memory stays on this Mac; the account only lets Claude reach it through a secure tunnel.</p>
     <p class="hint" style="margin-bottom:8px">Status: <b id="acct-status">…</b></p>
     <div class="row"><button class="btn" id="acct-btn" onclick="toggleAccount()">Connect account</button></div>
   </div>
@@ -265,19 +382,21 @@ function catColor(c, i) { return CAT_COLORS[c] || PALETTE[(i||0) % PALETTE.lengt
 let CATEGORIES = ['Study','Entertainment','Work','Other'];
 
 function show(tab) {
-  ['today','search','brain','rules','settings'].forEach(t => {
+  ['today','trends','search','brain','history','rules','settings'].forEach(t => {
     document.getElementById('view-' + t).classList.toggle('hidden', t !== tab);
     document.getElementById('tab-' + t).classList.toggle('active', t === tab);
   });
   if (tab === 'today') loadToday();
+  if (tab === 'trends') loadTrends();
   if (tab === 'brain') loadBrain();
+  if (tab === 'history') loadHistory();
   if (tab === 'rules') loadRules();
   if (tab === 'settings') loadSettings();
 }
 
-function renderDonut(cats) {
-  const svg = document.getElementById('donut');
-  const legend = document.getElementById('donut-legend');
+function renderDonut(cats, svgId, legendId) {
+  const svg = document.getElementById(svgId || 'donut');
+  const legend = document.getElementById(legendId || 'donut-legend');
   // Accept either [{category,total}] (from the API) or {name: seconds}.
   let pairs;
   if (Array.isArray(cats)) {
@@ -354,17 +473,33 @@ async function loadToday() {
         '<div class="time">' + fmtDur(a.total) + '</div></div>').join('');
     } else apps.innerHTML = '<div class="empty">no data yet</div>';
 
-    const tl = document.getElementById('timeline');
-    if (o.sessions.length) {
-      tl.innerHTML = o.sessions.slice().reverse().map(s =>
-        '<div class="sess' + (s.is_idle ? ' idle' : '') + '">' +
-        '<span class="t">' + fmtTime(s.ts_start) + '–' + fmtTime(s.ts_end) + '</span>' +
-        '<span class="app">' + esc(s.app) + '</span>' +
-        '<span class="title">' + esc(s.title) +
-        (s.is_idle ? '' : catChips(s.app, s.title, s.category)) + '</span>' +
-        '<span class="dur">' + fmtDur(s.duration) + '</span></div>').join('');
-    } else tl.innerHTML = '<div class="empty">no activity logged for this day</div>';
+    lastSessions = o.sessions || [];
+    renderTimeline();
   } catch(e) { console.error(e); }
+}
+
+let lastSessions = [];
+let timelineSort = 'desc'; // 'desc' = newest first
+
+function renderTimeline() {
+  const tl = document.getElementById('timeline');
+  const btn = document.getElementById('sortbtn');
+  if (btn) btn.textContent = timelineSort === 'desc' ? 'Newest first ↓' : 'Oldest first ↑';
+  if (!lastSessions.length) { tl.innerHTML = '<div class="empty">no activity logged for this day</div>'; return; }
+  const arr = lastSessions.slice().sort((a, b) =>
+    timelineSort === 'desc' ? b.ts_start - a.ts_start : a.ts_start - b.ts_start);
+  tl.innerHTML = arr.map(s =>
+    '<div class="sess' + (s.is_idle ? ' idle' : '') + '">' +
+    '<span class="t">' + fmtTime(s.ts_start) + '–' + fmtTime(s.ts_end) + '</span>' +
+    '<span class="app">' + esc(s.app) + '</span>' +
+    '<span class="title">' + esc(s.title) + '</span>' +
+    '<span class="dur">' + fmtDur(s.duration) + '</span>' +
+    (s.is_idle ? '' : catChips(s.app, s.title, s.category)) + '</div>').join('');
+}
+
+function toggleSort() {
+  timelineSort = timelineSort === 'desc' ? 'asc' : 'desc';
+  renderTimeline();
 }
 
 async function loadRules() {
@@ -407,6 +542,81 @@ async function loadDigest() {
   document.getElementById('digest-box').classList.remove('hidden');
 }
 
+function deltaDur(s) { return (s >= 0 ? '+' : '-') + fmtDur(Math.abs(s)); }
+
+async function loadTrends() {
+  const days = parseInt(document.getElementById('range').value) || 7;
+  const label = days <= 7 ? 'Weekly' : (days <= 31 ? 'Monthly' : '3-month');
+  document.getElementById('t-active-k').textContent = label + ' active time';
+  document.getElementById('t-focus-k').textContent = label + ' focus score';
+  document.getElementById('t-idle-k').textContent = label + ' idle time';
+  let r;
+  try { r = await api('/api/report?days=' + days); } catch(e) { return; }
+  const T = r.totals, P = r.prior;
+  document.getElementById('t-active').textContent = fmtDur(T.active);
+  document.getElementById('t-idle').textContent = fmtDur(T.idle);
+  const fs = (T.focus + T.multitask) > 0 ? Math.round(100 * T.focus / (T.focus + T.multitask)) : 0;
+  const pfs = (P.focus + P.multitask) > 0 ? Math.round(100 * P.focus / (P.focus + P.multitask)) : 0;
+  document.getElementById('t-focus').textContent = fs + '%';
+  document.getElementById('t-active-d').textContent = deltaDur(T.active - P.active) + ' vs last period';
+  document.getElementById('t-idle-d').textContent = deltaDur(T.idle - P.idle) + ' vs last period';
+  document.getElementById('t-focus-d').textContent = ((fs - pfs) >= 0 ? '+' : '') + (fs - pfs) + '% vs last period';
+  document.getElementById('chart-line').innerHTML = svgLine(r.daily);
+  document.getElementById('chart-bars').innerHTML = svgBars(r.daily);
+  renderDonut(r.categories, 'donut2', 'donut-legend2');
+}
+
+function svgLine(daily) {
+  const W = 600, H = 200, pL = 30, pR = 12, pT = 12, pB = 24, n = daily.length;
+  if (!n) return '<div class="empty">no data</div>';
+  const xOf = (i) => pL + (n <= 1 ? (W - pL - pR) / 2 : (W - pL - pR) * i / (n - 1));
+  const yOf = (pct) => pT + (H - pT - pB) * (1 - pct / 100);
+  let grid = '';
+  [0, 25, 50, 75, 100].forEach(gy => {
+    const y = yOf(gy);
+    grid += '<line x1="' + pL + '" y1="' + y + '" x2="' + (W - pR) + '" y2="' + y + '" stroke="#262a36"/>' +
+            '<text x="' + (pL - 6) + '" y="' + (y + 3) + '" fill="#8a90a3" font-size="9" text-anchor="end">' + gy + '</text>';
+  });
+  const pts = daily.map((d, i) => {
+    const tot = d.focus + d.multitask;
+    const pct = tot > 0 ? 100 * d.focus / tot : 0;
+    return [xOf(i), yOf(pct)];
+  });
+  const poly = pts.map(p => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ');
+  const dots = pts.map(p => '<circle cx="' + p[0].toFixed(1) + '" cy="' + p[1].toFixed(1) + '" r="3" fill="#4fd1a5"/>').join('');
+  const step = Math.ceil(n / 7);
+  const xl = daily.map((d, i) => i % step === 0
+    ? '<text x="' + xOf(i).toFixed(1) + '" y="' + (H - 8) + '" fill="#8a90a3" font-size="9" text-anchor="middle">' + d.date.slice(5) + '</text>' : '').join('');
+  return '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%">' + grid +
+         '<polyline points="' + poly + '" fill="none" stroke="#4fd1a5" stroke-width="2"/>' + dots + xl + '</svg>';
+}
+
+function svgBars(daily) {
+  const W = 600, H = 220, pL = 34, pR = 12, pT = 12, pB = 24, n = daily.length;
+  if (!n) return '<div class="empty">no data</div>';
+  const maxMin = Math.max(1, ...daily.map(d => Math.max(d.active, d.idle) / 60));
+  const band = (W - pL - pR) / n;
+  const bw = Math.max(3, Math.min(14, band / 2 - 2));
+  const hOf = (min) => (H - pT - pB) * (min / maxMin);
+  let grid = '';
+  for (let k = 0; k <= 4; k++) {
+    const v = maxMin * k / 4, y = pT + (H - pT - pB) * (1 - k / 4);
+    grid += '<line x1="' + pL + '" y1="' + y + '" x2="' + (W - pR) + '" y2="' + y + '" stroke="#262a36"/>' +
+            '<text x="' + (pL - 6) + '" y="' + (y + 3) + '" fill="#8a90a3" font-size="9" text-anchor="end">' + Math.round(v) + '</text>';
+  }
+  let bars = '';
+  daily.forEach((d, i) => {
+    const cx = pL + band * i + band / 2;
+    const ah = hOf(d.active / 60), wh = hOf(d.idle / 60);
+    bars += '<rect x="' + (cx - bw - 1).toFixed(1) + '" y="' + (H - pB - ah).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + ah.toFixed(1) + '" fill="#5b8def" rx="1"/>';
+    bars += '<rect x="' + (cx + 1).toFixed(1) + '" y="' + (H - pB - wh).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + wh.toFixed(1) + '" fill="#4a4f5e" rx="1"/>';
+  });
+  const step = Math.ceil(n / 7);
+  const xl = daily.map((d, i) => i % step === 0
+    ? '<text x="' + (pL + band * i + band / 2).toFixed(1) + '" y="' + (H - 8) + '" fill="#8a90a3" font-size="9" text-anchor="middle">' + d.date.slice(5) + '</text>' : '').join('');
+  return '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%">' + grid + bars + xl + '</svg>';
+}
+
 async function doSearch() {
   const q = document.getElementById('q').value.trim();
   if (!q) return;
@@ -445,8 +655,8 @@ async function loadBrain() {
   if (b.reminders.length) {
     rem.innerHTML = b.reminders.map(r =>
       '<div class="fact"><span class="pill ' + esc(r.kind) + '">' + esc(r.kind) + '</span>' +
-      '<span class="title">' + esc(r.title) + (r.interval_idx >= 0 ? ' <span class="hint">(revision ' + (r.interval_idx+1) + ')</span>' : '') + '</span>' +
-      '<span class="due">' + fmtDate(r.fire_ts) + '</span></div>').join('');
+      '<span class="title">' + esc(r.title) + (r.remaining > 1 ? ' <span class="hint">(' + r.remaining + ' scheduled)</span>' : '') + '</span>' +
+      '<span class="due">next ' + fmtDate(r.fire_ts) + '</span></div>').join('');
   } else rem.innerHTML = '<div class="empty">no reminders scheduled</div>';
 }
 
@@ -465,6 +675,263 @@ async function createFact() {
   document.getElementById('new-title').value = '';
   loadBrain();
 }
+
+// ---------- History / revision calendar ----------
+let histMode = 'week';          // 'week' | 'month' | '3mo'
+let histAnchor = new Date();    // any date inside the displayed period
+let histByDay = {};             // 'yyyy-mm-dd' -> [items]
+let histSelDay = null;
+const HIST_COLORS = {watched:'#22d3ee', done:'#4fd1a5', missed:'#ff6b6b', due:'#ffb454', upcoming:'#7c6cff', closed:'#5b6274'};
+const HIST_LABELS = {watched:'watched', done:'revised', missed:'missed', due:'due today', upcoming:'upcoming', closed:'closed early'};
+const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const DOW = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+
+function histColor(it) { return HIST_COLORS[it.status] || '#5b6274'; }
+function histIcon(it) { return it.type === 'watched' ? '🎬' : (it.type === 'deadline' ? (it.kind === 'bill' ? '💸' : '⏰') : '🔁'); }
+
+function setHistMode(m) {
+  histMode = m; histSelDay = null;
+  document.querySelectorAll('#hist-seg button').forEach(b => b.classList.toggle('on', b.dataset.m === m));
+  loadHistory();
+}
+function histShift(n) {
+  const a = new Date(histAnchor);
+  if (histMode === 'week') a.setDate(a.getDate() + 7 * n);
+  else if (histMode === 'month') a.setMonth(a.getMonth() + n, 1);
+  else a.setMonth(a.getMonth() + 3 * n, 1);
+  histAnchor = a; histSelDay = null;
+  loadHistory();
+}
+function histToday() { histAnchor = new Date(); histSelDay = null; loadHistory(); }
+
+function startOfWeek(d) {
+  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  x.setDate(x.getDate() - (x.getDay() + 6) % 7); // Monday start
+  return x;
+}
+function histRange() {
+  const a = histAnchor;
+  if (histMode === 'week') { const s = startOfWeek(a); return [s, new Date(s.getFullYear(), s.getMonth(), s.getDate() + 7)]; }
+  if (histMode === 'month') return [new Date(a.getFullYear(), a.getMonth(), 1), new Date(a.getFullYear(), a.getMonth() + 1, 1)];
+  return [new Date(a.getFullYear(), a.getMonth() - 2, 1), new Date(a.getFullYear(), a.getMonth() + 1, 1)];
+}
+function fmtMD(d) { return d.toLocaleDateString(undefined, {month:'short', day:'numeric'}); }
+function histLabel(s, e) {
+  const last = new Date(e.getTime() - 86400000);
+  if (histMode === 'week') return fmtMD(s) + ' – ' + fmtMD(last) + ', ' + last.getFullYear();
+  if (histMode === 'month') return MONTH_NAMES[s.getMonth()] + ' ' + s.getFullYear();
+  return MONTH_NAMES[s.getMonth()] + ' – ' + MONTH_NAMES[last.getMonth()] + ' ' + last.getFullYear();
+}
+
+async function loadHistory() {
+  const [s, e] = histRange();
+  document.getElementById('hist-label').textContent = histLabel(s, e);
+  const prevStart = new Date(s.getTime() - (e.getTime() - s.getTime()));
+  let cur, prev;
+  try {
+    cur = await api('/api/history?from=' + s.getTime()/1000 + '&to=' + e.getTime()/1000);
+    prev = await api('/api/history?from=' + prevStart.getTime()/1000 + '&to=' + s.getTime()/1000);
+  } catch (err) { console.error(err); return; }
+  histByDay = {};
+  (cur.items || []).forEach(it => {
+    const k = todayStr(new Date(it.ts * 1000));
+    (histByDay[k] = histByDay[k] || []).push(it);
+  });
+  renderHistCards(histStats(cur.items || []), histStats(prev.items || []));
+  document.getElementById('hist-cmp-box').classList.toggle('hidden', histMode !== '3mo');
+  redrawCal(s);
+  if (histMode === '3mo') renderCmp(s);
+  if (histSelDay) showDay(histSelDay);
+  else document.getElementById('hist-day-box').classList.add('hidden');
+}
+
+function redrawCal(s) {
+  s = s || histRange()[0];
+  const cal = document.getElementById('hist-cal');
+  if (histMode === 'week') cal.innerHTML = weekHTML(s);
+  else if (histMode === 'month') cal.innerHTML = monthHTML(s.getFullYear(), s.getMonth(), false);
+  else cal.innerHTML = threeMoHTML(s);
+}
+
+function histStats(items) {
+  const st = {watched:0, done:0, missed:0, due:0, upcoming:0};
+  items.forEach(it => {
+    if (it.type === 'watched') st.watched++;
+    else if (it.type === 'revision' && st[it.status] !== undefined) st[it.status]++;
+  });
+  st.rate = (st.done + st.missed) > 0 ? Math.round(100 * st.done / (st.done + st.missed)) : null;
+  return st;
+}
+function deltaN(a, b) { const d = a - b; return (d >= 0 ? '+' : '') + d; }
+function renderHistCards(c, p) {
+  document.getElementById('h-watched').textContent = c.watched;
+  document.getElementById('h-watched-d').textContent = deltaN(c.watched, p.watched) + ' vs previous period';
+  document.getElementById('h-done').textContent = c.done;
+  document.getElementById('h-done-d').textContent = deltaN(c.done, p.done) + ' vs previous period';
+  document.getElementById('h-missed').textContent = c.missed;
+  document.getElementById('h-missed-d').textContent = deltaN(c.missed, p.missed) + ' vs previous period';
+  document.getElementById('h-rate').textContent = c.rate === null ? '–' : c.rate + '%';
+  document.getElementById('h-rate-d').textContent = (c.rate === null || p.rate === null)
+    ? 'revisions done ÷ (done + missed)' : deltaN(c.rate, p.rate) + '% vs previous period';
+}
+
+function weekHTML(s) {
+  const t = todayStr();
+  let cols = '';
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(s.getFullYear(), s.getMonth(), s.getDate() + i);
+    const k = todayStr(d);
+    const items = (histByDay[k] || []).slice().sort((a, b) => a.ts - b.ts);
+    const chips = items.slice(0, 8).map(it =>
+      '<div class="hchip"><i style="background:' + histColor(it) + '"></i><span>' + histIcon(it) + ' ' + esc(it.title) + '</span></div>').join('') +
+      (items.length > 8 ? '<div class="cal-more">+' + (items.length - 8) + ' more</div>' : '');
+    cols += '<div class="wk-col' + (k === t ? ' today' : '') + (k === histSelDay ? ' sel' : '') + '" onclick="showDay(\'' + k + '\')">' +
+      '<div class="dn">' + DOW[i] + ' ' + d.getDate() + '</div>' +
+      (chips || '<div class="cal-more" style="opacity:.5">—</div>') + '</div>';
+  }
+  return '<div class="wk-grid">' + cols + '</div>';
+}
+
+function monthHTML(y, mo, mini) {
+  const t = todayStr();
+  const lead = (new Date(y, mo, 1).getDay() + 6) % 7;
+  const nDays = new Date(y, mo + 1, 0).getDate();
+  const head = DOW.map(w => '<div>' + (mini ? w[0] : w) + '</div>').join('');
+  let cells = '';
+  for (let i = 0; i < lead; i++) cells += mini ? '<div class="mini-cell blank"></div>' : '<div class="cal-cell blank"></div>';
+  for (let d = 1; d <= nDays; d++) {
+    const k = todayStr(new Date(y, mo, d));
+    const items = histByDay[k] || [];
+    if (mini) {
+      let bg = '';
+      if (items.some(i => i.status === 'missed')) bg = HIST_COLORS.missed;
+      else if (items.some(i => i.status === 'done')) bg = HIST_COLORS.done;
+      else if (items.some(i => i.status === 'due')) bg = HIST_COLORS.due;
+      else if (items.some(i => i.type === 'watched')) bg = HIST_COLORS.watched;
+      else if (items.some(i => i.status === 'upcoming')) bg = HIST_COLORS.upcoming;
+      cells += '<div class="mini-cell' + (k === t ? ' today' : '') + '" title="' + k + (items.length ? ' · ' + items.length + ' item' + (items.length > 1 ? 's' : '') : '') + '"' +
+        (bg ? ' style="background:' + bg + '26;box-shadow:inset 0 -2px 0 ' + bg + '"' : '') +
+        ' onclick="showDay(\'' + k + '\')">' + d + '</div>';
+    } else {
+      const dots = items.slice(0, 10).map(it => '<i style="background:' + histColor(it) + '" title="' + esc(HIST_LABELS[it.status] || it.status) + '"></i>').join('');
+      cells += '<div class="cal-cell' + (k === t ? ' today' : '') + (k === histSelDay ? ' sel' : '') + '" onclick="showDay(\'' + k + '\')">' +
+        '<div class="dn">' + d + '</div><div class="cal-dots">' + dots + '</div>' +
+        (items.length > 10 ? '<div class="cal-more">+' + (items.length - 10) + '</div>' : '') + '</div>';
+    }
+  }
+  return '<div class="cal-head">' + head + '</div><div class="' + (mini ? 'mini-grid' : 'cal-grid') + '">' + cells + '</div>';
+}
+
+function threeMoHTML(s) {
+  let out = '<div class="mini3">';
+  for (let i = 0; i < 3; i++) {
+    const d = new Date(s.getFullYear(), s.getMonth() + i, 1);
+    out += '<div class="mini-cal"><div class="mc-title">' + MONTH_NAMES[d.getMonth()] + ' ' + d.getFullYear() + '</div>' +
+      monthHTML(d.getFullYear(), d.getMonth(), true) + '</div>';
+  }
+  return out + '</div>';
+}
+
+function renderCmp(s) {
+  const stats = [];
+  for (let i = 0; i < 3; i++) {
+    const d = new Date(s.getFullYear(), s.getMonth() + i, 1);
+    const from = d.getTime(), to = new Date(d.getFullYear(), d.getMonth() + 1, 1).getTime();
+    const items = [];
+    Object.keys(histByDay).forEach(k => histByDay[k].forEach(it => {
+      const t = it.ts * 1000;
+      if (t >= from && t < to) items.push(it);
+    }));
+    const st = histStats(items);
+    st.name = MONTH_NAMES[d.getMonth()] + ' ' + d.getFullYear();
+    stats.push(st);
+  }
+  const rows = [
+    ['Videos watched', stats.map(x => x.watched)],
+    ['Revisions done', stats.map(x => x.done)],
+    ['Revisions missed', stats.map(x => x.missed)],
+    ['Still scheduled', stats.map(x => x.upcoming + x.due)],
+    ['Completion rate', stats.map(x => x.rate === null ? '–' : x.rate + '%')]
+  ];
+  let html = '<table class="rules"><thead><tr><th></th>' + stats.map(x => '<th>' + x.name + '</th>').join('') + '</tr></thead><tbody>';
+  rows.forEach(r => {
+    html += '<tr><td><b>' + r[0] + '</b></td>' + r[1].map((v, i) => {
+      let dl = '';
+      if (i > 0 && typeof v === 'number' && typeof r[1][i-1] === 'number' && v !== r[1][i-1]) {
+        const dd = v - r[1][i-1];
+        dl = ' <span class="hint">(' + (dd > 0 ? '+' : '') + dd + ')</span>';
+      }
+      return '<td>' + v + dl + '</td>';
+    }).join('') + '</tr>';
+  });
+  html += '</tbody></table>' + cmpBars(stats);
+  document.getElementById('hist-cmp').innerHTML = html;
+}
+
+function cmpBars(stats) {
+  const W = 600, H = 190, pL = 30, pR = 10, pT = 14, pB = 26;
+  const maxV = Math.max(1, ...stats.map(s => Math.max(s.watched, s.done, s.missed)));
+  const series = [['watched', HIST_COLORS.watched, 'Watched'], ['done', HIST_COLORS.done, 'Revised'], ['missed', HIST_COLORS.missed, 'Missed']];
+  const band = (W - pL - pR) / stats.length;
+  const bw = Math.min(34, (band - 40) / 3);
+  let out = '';
+  for (let k = 0; k <= 4; k++) {
+    const v = maxV * k / 4, y = pT + (H - pT - pB) * (1 - k / 4);
+    out += '<line x1="' + pL + '" y1="' + y + '" x2="' + (W - pR) + '" y2="' + y + '" stroke="#262a36"/>' +
+           '<text x="' + (pL - 6) + '" y="' + (y + 3) + '" fill="#8a90a3" font-size="9" text-anchor="end">' + Math.round(v) + '</text>';
+  }
+  stats.forEach((s, i) => {
+    const cx = pL + band * i + band / 2;
+    series.forEach((sr, j) => {
+      const v = s[sr[0]], h = (H - pT - pB) * v / maxV;
+      const x = cx + (j - 1) * (bw + 4) - bw / 2;
+      out += '<rect x="' + x.toFixed(1) + '" y="' + (H - pB - h).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + h.toFixed(1) + '" rx="2" fill="' + sr[1] + '"/>' +
+        (v ? '<text x="' + (x + bw / 2).toFixed(1) + '" y="' + (H - pB - h - 4).toFixed(1) + '" fill="#8a90a3" font-size="9" text-anchor="middle">' + v + '</text>' : '');
+    });
+    out += '<text x="' + cx.toFixed(1) + '" y="' + (H - 8) + '" fill="#8a90a3" font-size="10" text-anchor="middle">' + s.name.split(' ')[0] + '</text>';
+  });
+  return '<div class="chartlegend" style="margin-top:16px">' +
+    series.map(sr => '<span><i class="sw" style="background:' + sr[1] + '"></i>' + sr[2] + '</span>').join('') + '</div>' +
+    '<div class="chartbox"><svg viewBox="0 0 ' + W + ' ' + H + '" width="100%">' + out + '</svg></div>';
+}
+
+function showDay(k) {
+  histSelDay = k;
+  const box = document.getElementById('hist-day-box');
+  const items = (histByDay[k] || []).slice().sort((a, b) => a.ts - b.ts);
+  const d = new Date(k + 'T00:00:00');
+  document.getElementById('hist-day-title').textContent =
+    d.toLocaleDateString(undefined, {weekday:'long', year:'numeric', month:'long', day:'numeric'});
+  box.classList.remove('hidden');
+  document.getElementById('hist-day-items').innerHTML = items.length ? items.map(it => {
+    const revN = (it.type === 'revision' && it.interval_idx >= 0)
+      ? ' <span class="hint">revision ' + (it.interval_idx + 1) + ' of 5</span>' : '';
+    let actions = '';
+    if (it.type === 'revision' && (it.status === 'due' || it.status === 'missed' || it.status === 'upcoming'))
+      actions += '<button class="btn small" onclick="markRevDone(' + it.reminder_id + ')">did it ✓</button>';
+    if (it.status === 'upcoming' || it.status === 'due')
+      actions += '<a class="btn small ghost" style="text-decoration:none" target="_blank" href="' + gcalUrl(it) + '">+ GCal</a>';
+    return '<div class="fact"><span class="pill" style="color:' + histColor(it) + '">' + (HIST_LABELS[it.status] || it.status) + '</span>' +
+      '<span class="hint" style="min-width:42px">' + fmtTime(it.ts) + '</span>' +
+      '<span class="title">' + histIcon(it) + ' ' + esc(it.title) + revN + '</span>' + actions + '</div>';
+  }).join('') : '<div class="empty">nothing on this day</div>';
+  if (histMode !== '3mo') redrawCal(); // refresh the selection highlight
+}
+
+async function markRevDone(id) {
+  await api('/api/fact', {method:'POST', body: JSON.stringify({action:'reminder_done', id:id})});
+  loadHistory();
+}
+
+function gcalUrl(it) {
+  const p = d => d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+  const st = new Date(it.ts * 1000), en = new Date(it.ts * 1000 + 1800000);
+  const text = it.type === 'revision' ? 'Revise: ' + it.title : it.title;
+  return 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=' + encodeURIComponent(text) +
+    '&dates=' + p(st) + '/' + p(en) + '&details=' + encodeURIComponent('Scheduled by MitthuAI');
+}
+
+function exportICS() { location.href = '/api/calendar.ics?token=' + encodeURIComponent(TOKEN); }
 
 async function loadSettings() {
   const s = await api('/api/status');

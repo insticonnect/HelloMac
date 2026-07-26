@@ -13,31 +13,85 @@ and turns it into:
 **100% local.** SQLite on your disk, on-device Apple embeddings, server bound to
 `127.0.0.1` with a bearer token. No cloud, no telemetry.
 
+> **Naming:** the repo and the built app are `HelloMac`; the menu bar and
+> dashboard show the product name **MitthuAI** 🦜. Same app — don't be thrown
+> when the two names show up side by side.
+
 ---
 
-## Build & run
+## Quick start (new here? start at step 1)
 
-Requires macOS 12+ and Xcode command line tools (`xcode-select --install`).
+**Requirements:** a Mac running macOS 12 or newer. Nothing else — no Node, no
+Homebrew, no package manager. The app is plain Swift against system frameworks.
+
+**1. Install Xcode command line tools** (skip if `swiftc --version` already works):
+
+```bash
+xcode-select --install
+```
+
+**2. Clone the repo:**
+
+```bash
+git clone https://github.com/insticonnect/HelloMac.git
+cd HelloMac
+```
+
+**3. Build it** (takes about a minute; everything lands in `build/`):
 
 ```bash
 ./build.sh
+```
+
+If you get `permission denied`, run `chmod +x build.sh` first.
+
+**4. Launch it:**
+
+```bash
 open build/HelloMac.app
 ```
 
-### Permissions (first run)
+A 🦜 parrot icon appears in your menu bar — that's the app. There's no dock icon
+and no window; everything happens from the menu bar and the dashboard.
 
-1. **Accessibility** (required) — System Settings → Privacy & Security → Accessibility → enable HelloMac. This is how window titles and on-screen text are read (the same API VoiceOver uses). Relaunch the app after granting.
+**5. Grant permissions (first run):**
+
+1. **Accessibility** (required) — System Settings → Privacy & Security → Accessibility → enable HelloMac. This is how window titles and on-screen text are read (the same API VoiceOver uses). **Quit and relaunch the app after granting**, or capture stays empty.
 2. **Automation** (optional) — prompted the first time a browser URL is read. Powers per-tab URLs in the timeline.
 3. **Notifications** (optional) — for revision/deadline reminders.
 
+**6. Open the dashboard:** click the 🦜 menu bar icon → **Open Dashboard**. It
+opens `http://localhost:4789/` with your access token attached. Give it a few
+minutes of normal use before expecting the timeline to fill in.
+
+## Updating to a newer version
+
+Pull the latest code and rebuild — same two commands every time:
+
+```bash
+git pull
+./build.sh
+```
+
+Then quit the app from the menu bar (🦜 → Quit) and `open build/HelloMac.app`
+again. Quitting first is the safe order, since the rebuild replaces the binary
+the running app is using.
+
+**Your data survives updates.** Everything lives in
+`~/Library/Application Support/HelloMac/hellomac.db`, which the build never
+touches — new columns and tables are migrated automatically on launch. Your
+access token, settings, and rules carry over too, so you don't need to
+reconnect Claude after an update.
+
 ## Dashboard
 
-Click the 🧠 menu bar icon → **Open Dashboard** (it opens `http://localhost:4789/`
+Click the 🦜 menu bar icon → **Open Dashboard** (it opens `http://localhost:4789/`
 with your access token). Tabs:
 
 - **Today** — active/idle time, focus-vs-multitasking score, tracked-event count, category-distribution donut, top-apps chart, and a full session timeline. Each timeline row has inline **Study / Entertainment / Work / Other** chips — tap one to teach HelloMac how to categorize that title.
 - **Search** — semantic + keyword search with date filters
 - **Brain** — open items (bills/deadlines/watched/notes), upcoming reminders
+- **History** — a revision calendar with Week / Month / 3-Month views (◀ ▶ to move between periods). Shows when you watched each video, which revisions you did, missed, or have coming up, with summary cards vs the previous period and a month-by-month comparison table + chart in the 3-month view. Click any day to see details and mark a revision **did it ✓**. **Export .ics** downloads the upcoming schedule for Google Calendar (Settings → Import & export), Apple Calendar, or Outlook; each upcoming item also has a one-click **+ GCal** link.
 - **Rules** — create categorization rules (app + title-contains → category). A new rule re-tags matching history immediately, including same-title activity within ±10 minutes so a video you flicked away from and back to lands in one bucket. Delete any rule to re-categorize affected activity.
 - **Settings** — pause, excluded apps, capture toggles, data purge, MCP setup
 

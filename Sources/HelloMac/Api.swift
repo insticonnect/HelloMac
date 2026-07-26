@@ -99,6 +99,10 @@ final class Api {
             store.categorizeTitle(app: app, title: title, category: category)
             return ("200 OK", ct, Api.json(["ok": true]), [:])
 
+        case ("GET", "/api/report"):
+            let days = min(max(req.query["days"].flatMap(Int.init) ?? 7, 1), 366)
+            return ("200 OK", ct, Api.json(store.report(days: days)), [:])
+
         case ("GET", "/api/search"):
             let q = req.query["q"] ?? ""
             guard !q.isEmpty else {
@@ -109,6 +113,23 @@ final class Api {
             let limit = req.query["limit"].flatMap(Int.init) ?? 20
             let results = store.search(query: q, from: from, to: to, limit: min(limit, 50))
             return ("200 OK", ct, Api.json(["query": q, "results": results]), [:])
+
+        case ("GET", "/api/history"):
+            // Calendar/history feed: watch events, revision outcomes, deadlines.
+            let now = Date().timeIntervalSince1970
+            let from = req.query["from"].flatMap(Double.init) ?? (now - 90 * 86400)
+            let to = req.query["to"].flatMap(Double.init) ?? (now + 60 * 86400)
+            guard to > from, to - from <= 400 * 86400 else {
+                return ("400 Bad Request", ct, Api.json(["error": "bad range"]), [:])
+            }
+            return ("200 OK", ct, Api.json(["from": from, "to": to,
+                                            "items": store.history(from: from, to: to)]), [:])
+
+        case ("GET", "/api/calendar.ics"):
+            // iCalendar feed of the upcoming schedule, for Google/Apple/Outlook.
+            let ics = CalendarExport.ics(store: store)
+            return ("200 OK", "text/calendar; charset=utf-8", Data(ics.utf8),
+                    ["Content-Disposition": "attachment; filename=\"mitthuai-revisions.ics\""])
 
         case ("GET", "/api/brain"):
             let obj: [String: Any] = [
@@ -148,6 +169,13 @@ final class Api {
                     return ("400 Bad Request", ct, Api.json(["error": "missing id"]), [:])
                 }
                 store.addRevisionLadder(factId: Int64(id))
+                return ("200 OK", ct, Api.json(["ok": true]), [:])
+            case "reminder_done":
+                // Mark one revision step as actually completed (History tab).
+                guard let id = body["id"] as? Int else {
+                    return ("400 Bad Request", ct, Api.json(["error": "missing id"]), [:])
+                }
+                store.markReminderDone(id: Int64(id))
                 return ("200 OK", ct, Api.json(["ok": true]), [:])
             default:
                 return ("400 Bad Request", ct, Api.json(["error": "unknown action"]), [:])

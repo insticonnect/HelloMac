@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import Combine
 
 /// View state for the popover. An ObservableObject instead of @State so the
 /// app builds with plain swiftc on SDKs where @State is a compiler macro.
@@ -16,6 +17,10 @@ struct MenuBarView: View {
     let openDashboard: () -> Void
     @ObservedObject var model: MenuBarModel
 
+    // Refresh the live counts (active time, needs-attention) every few seconds
+    // while the popover is open, so they reflect changes you make elsewhere.
+    private let ticker = Timer.publish(every: 3, on: .main, in: .common).autoconnect()
+
     init(tracker: Tracker, store: Store, openDashboard: @escaping () -> Void) {
         self.tracker = tracker
         self.store = store
@@ -26,9 +31,9 @@ struct MenuBarView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Image(systemName: "brain.head.profile")
-                    .foregroundColor(.purple)
-                Text("HelloMac").font(.headline)
+                Text("🦜")
+                    .font(.headline)
+                Text("MitthuAI").font(.headline)
                 Spacer()
                 Circle()
                     .fill(model.paused ? Color.orange : Color.green)
@@ -45,7 +50,8 @@ struct MenuBarView: View {
                 if !tracker.currentWindowTitle.isEmpty && !tracker.isIdle {
                     Text(tracker.currentWindowTitle)
                         .font(.caption).foregroundColor(.secondary)
-                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
 
@@ -83,6 +89,7 @@ struct MenuBarView: View {
         .padding(16)
         .frame(width: 280)
         .onAppear(perform: refresh)
+        .onReceive(ticker) { _ in refresh() }
     }
 
     private func togglePause() {

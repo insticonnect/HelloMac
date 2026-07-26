@@ -69,6 +69,8 @@ final class Store {
         // Additive migration for DBs created before the `model` column existed.
         // (ALTER errors harmlessly if the column already exists.)
         db.exec("ALTER TABLE embeddings ADD COLUMN model TEXT DEFAULT '';")
+        // When a revision was actually completed (status 'done'), for history.
+        db.exec("ALTER TABLE reminders ADD COLUMN done_ts REAL;")
         // Prior builds only ever used the Apple backend, so tag legacy vectors
         // accordingly to keep them visible to semantic search.
         db.exec("UPDATE embeddings SET model = 'apple-nl-en' WHERE model = '' OR model IS NULL;")
@@ -219,6 +221,56 @@ final class Store {
     func eventCountForDate(_ dateStr: String) -> Int {
         let (s, e) = dayBounds(dateStr)
         return db.query("SELECT COUNT(*) AS n FROM events WHERE ts_start >= ? AND ts_start < ?", [s, e]).first?.int("n") ?? 0
+    }
+
+    /// Multi-day report for the Trends view: per-day active/idle/focus/multitask,
+    /// period totals, the preceding-period totals (for the "vs last period"
+    /// deltas), and category totals across the whole range.
+    func report(days: Int) -> [String: Any] {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let fmt = DateFormatter()
+        fmt.dateFormat = "yyyy-MM-dd"
+        fmt.timeZone = .current
+
+        var daily: [[String: Any]] = []
+        var tActive = 0.0, tIdle = 0.0, tFocus = 0.0, tMulti = 0.0
+        var catTotals: [String: Double] = [:]
+
+        for i in stride(from: days - 1, through: 0, by: -1) {
+            guard let d = cal.date(byAdding: .day, value: -i, to: today) else { continue }
+            let ds = fmt.string(from: d)
+            let s = statsForDate(ds)
+            let f = focusStatsForDate(ds)
+            daily.append(["date": ds, "active": s.active, "idle": s.idle,
+                          "focus": f.focus, "multitask": f.multitask])
+            tActive += s.active; tIdle += s.idle; tFocus += f.focus; tMulti += f.multitask
+            for row in categoryStatsForDate(ds) {
+                catTotals[row.str("category"), default: 0] += row.double("total")
+            }
+        }
+
+        // Preceding period of the same length, for comparison.
+        var pActive = 0.0, pIdle = 0.0, pFocus = 0.0, pMulti = 0.0
+        for i in 0..<days {
+            guard let d = cal.date(byAdding: .day, value: -(days + i), to: today) else { continue }
+            let ds = fmt.string(from: d)
+            let s = statsForDate(ds)
+            let f = focusStatsForDate(ds)
+            pActive += s.active; pIdle += s.idle; pFocus += f.focus; pMulti += f.multitask
+        }
+
+        let categories = catTotals
+            .map { ["category": $0.key, "total": $0.value] as [String: Any] }
+            .sorted { ($0["total"] as? Double ?? 0) > ($1["total"] as? Double ?? 0) }
+
+        return [
+            "days": days,
+            "daily": daily,
+            "totals": ["active": tActive, "idle": tIdle, "focus": tFocus, "multitask": tMulti],
+            "prior": ["active": pActive, "idle": pIdle, "focus": pFocus, "multitask": pMulti],
+            "categories": categories
+        ]
     }
 
     // MARK: - Settings / token
@@ -484,8 +536,14 @@ final class Store {
                [factId, fireTs, intervalIdx])
     }
 
-    /// Spaced-repetition ladder for a fact (e.g. a watched lecture).
+    /// Spaced-repetition ladder for a fact (e.g. a watched lecture). Idempotent:
+    /// clears any existing pending revision reminders for the fact first, so
+    /// re-enrolling (or auto-enroll + a manual "revise" tap) never stacks.
     func addRevisionLadder(factId: Int64, baseTs: Double? = nil) {
+        db.run("""
+            UPDATE reminders SET status = 'cancelled'
+            WHERE fact_id = ? AND status = 'pending' AND interval_idx >= 0
+            """, [factId])
         let base = baseTs ?? Date().timeIntervalSince1970
         let days: [Double] = [1, 3, 7, 14, 30]
         for (i, d) in days.enumerated() {
@@ -534,12 +592,86 @@ final class Store {
         db.run("UPDATE reminders SET status = 'fired' WHERE id = ?", [id])
     }
 
+    /// The user actually did this revision (vs. just receiving the nudge).
+    func markReminderDone(id: Int64) {
+        db.run("UPDATE reminders SET status = 'done', done_ts = ? WHERE id = ? AND status != 'cancelled'",
+               [Date().timeIntervalSince1970, id])
+    }
+
+    /// Everything the History calendar needs for a window: watch events, each
+    /// revision-ladder step with its outcome, and deadline/bill due dates.
+    /// Outcomes: done (revised), missed (day passed, never marked done),
+    /// due (scheduled today, still actionable), upcoming (in the future),
+    /// closed (the parent item was completed/dismissed before this step).
+    func history(from: Double, to: Double) -> [[String: Any]] {
+        var items: [[String: Any]] = []
+        let now = Date().timeIntervalSince1970
+        let todayStart = Calendar.current.startOfDay(for: Date()).timeIntervalSince1970
+
+        // Watch events — the day the video/lecture was first seen.
+        for f in db.query("""
+            SELECT id, title, created_ts FROM facts
+            WHERE kind = 'watched' AND created_ts >= ? AND created_ts < ?
+            ORDER BY created_ts ASC
+            """, [from, to]) {
+            items.append(["type": "watched", "fact_id": f.int("id"), "title": f.str("title"),
+                          "ts": f.double("created_ts"), "status": "watched"])
+        }
+
+        // Revision-ladder steps (interval_idx >= 0; idx -1 is a deadline nudge,
+        // which the deadline item below already represents).
+        for r in db.query("""
+            SELECT r.id AS reminder_id, r.fire_ts, r.interval_idx, r.status AS rstatus,
+                   f.id AS fact_id, f.title, f.status AS fstatus
+            FROM reminders r JOIN facts f ON f.id = r.fact_id
+            WHERE r.interval_idx >= 0 AND r.status != 'cancelled'
+              AND r.fire_ts >= ? AND r.fire_ts < ?
+            ORDER BY r.fire_ts ASC
+            """, [from, to]) {
+            let fireTs = r.double("fire_ts")
+            let status: String
+            if r.str("rstatus") == "done" { status = "done" }
+            else if r.str("fstatus") != "open" { status = "closed" }
+            else if fireTs < todayStart { status = "missed" }
+            else if fireTs <= now { status = "due" }
+            else { status = "upcoming" }
+            items.append(["type": "revision", "reminder_id": r.int("reminder_id"),
+                          "fact_id": r.int("fact_id"), "title": r.str("title"),
+                          "ts": fireTs, "interval_idx": r.int("interval_idx"),
+                          "status": status])
+        }
+
+        // Bills & deadlines, placed on their due date.
+        for f in db.query("""
+            SELECT id, kind, title, due_ts, status FROM facts
+            WHERE kind IN ('bill', 'deadline') AND due_ts IS NOT NULL
+              AND due_ts >= ? AND due_ts < ?
+            ORDER BY due_ts ASC
+            """, [from, to]) {
+            let status: String
+            switch f.str("status") {
+            case "done": status = "done"
+            case "dismissed": status = "closed"
+            default: status = f.double("due_ts") < now ? "missed" : "upcoming"
+            }
+            items.append(["type": "deadline", "fact_id": f.int("id"), "kind": f.str("kind"),
+                          "title": f.str("title"), "ts": f.double("due_ts"), "status": status])
+        }
+
+        return items
+    }
+
+    /// One row per fact — the NEXT pending reminder plus how many remain — so a
+    /// 5-step revision ladder shows as a single item, not five duplicates.
     func upcomingReminders() -> [[String: Any]] {
         return db.query("""
-            SELECT r.id AS reminder_id, r.fire_ts, r.interval_idx, r.status, f.id AS fact_id, f.kind, f.title
+            SELECT f.id AS fact_id, f.kind, f.title,
+                   MIN(r.fire_ts) AS fire_ts,
+                   COUNT(*) AS remaining
             FROM reminders r JOIN facts f ON f.id = r.fact_id
             WHERE r.status = 'pending' AND f.status = 'open'
-            ORDER BY r.fire_ts ASC LIMIT 50
+            GROUP BY r.fact_id
+            ORDER BY fire_ts ASC LIMIT 50
             """)
     }
 
