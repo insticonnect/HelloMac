@@ -71,6 +71,10 @@ enum DashboardHTML {
   .pill.bill { color: var(--warn); } .pill.deadline { color: var(--danger); }
   .pill.watched { color: var(--accent2); } .pill.note { color: var(--accent); }
   .fact .title { flex: 1; }
+  .fact .sub { display: block; color: var(--dim); font-size: 12px; margin-top: 3px; }
+  .fact .sub .note { color: var(--accent2); }
+  .fact .noteedit { display: flex; gap: 6px; margin-top: 5px; }
+  .fact .noteedit input { font-size: 12px; padding: 5px 8px; }
   .fact .due { color: var(--dim); font-size: 12px; white-space: nowrap; }
   .fact .due.over { color: var(--danger); font-weight: 700; }
   pre.digest { background: var(--panel2); border-radius: 10px; padding: 16px; white-space: pre-wrap; font: 13px/1.6 ui-monospace, Menlo, monospace; color: #c6cad6; }
@@ -239,6 +243,7 @@ enum DashboardHTML {
     <h2>Add item</h2>
     <div class="row">
       <input type="text" id="new-title" placeholder="e.g. Pay electricity bill">
+      <input type="text" id="new-note" placeholder="note (optional) — what this actually is" style="max-width:280px">
       <input type="date" id="new-due" style="max-width:180px">
       <input type="time" id="new-time" lang="en-US" style="max-width:150px" title="Reminder time (default 9:00 AM)">
       <button class="btn" onclick="createFact()">Add</button>
@@ -670,16 +675,43 @@ async function doSearch() {
   } catch(e) { box.innerHTML = '<div class="empty">search failed</div>'; }
 }
 
+let lastBrain = {facts: [], reminders: []};
+let editingNote = null;   // fact id whose note is being edited
+
 async function loadBrain() {
-  const b = await api('/api/brain');
+  lastBrain = await api('/api/brain');
+  renderBrain();
+}
+
+function renderBrain() {
+  const b = lastBrain;
   const facts = document.getElementById('facts');
   const now = Date.now()/1000;
   if (b.facts.length) {
     facts.innerHTML = b.facts.map(f => {
       const due = f.due_ts ? '<span class="due' + (f.due_ts < now ? ' over' : '') + '">due ' + fmtDate(f.due_ts) + '</span>' : '';
       const revBtn = f.kind === 'watched' ? '<button class="btn small ghost" onclick="factAction(' + f.id + ',\'revise\')">revise</button>' : '';
+      // Second line: your own note plus when this was captured — between them
+      // they answer "which video was this?" months later.
+      let second;
+      if (editingNote === f.id) {
+        second = '<span class="noteedit">' +
+          '<input type="text" id="note-input-' + f.id + '" value="' + esc(f.note || '').replace(/"/g, '&quot;') + '" ' +
+          'placeholder="e.g. Week 3 — Fourier series, phase shift part" ' +
+          'onkeydown="noteKey(event,' + f.id + ')">' +
+          '<button class="btn small" onclick="saveNote(' + f.id + ')">Save</button>' +
+          '<button class="btn small ghost" onclick="editingNote=null;renderBrain()">Cancel</button></span>';
+      } else {
+        const parts = [];
+        if (f.note) parts.push('<span class="note">' + esc(f.note) + '</span>');
+        if (f.created_ts) parts.push((f.kind === 'watched' ? 'watched ' : 'added ') + fmtDate(f.created_ts));
+        second = parts.length ? '<span class="sub">' + parts.join(' · ') + '</span>' : '';
+      }
+      const noteBtn = editingNote === f.id ? '' :
+        '<button class="btn small ghost" title="Add a note so you remember what this was" ' +
+        'onclick="editNote(' + f.id + ')">✎ ' + (f.note ? 'edit note' : 'note') + '</button>';
       return '<div class="fact"><span class="pill ' + esc(f.kind) + '">' + esc(f.kind) + '</span>' +
-        '<span class="title">' + linkTitle(f.title, f.detail) + '</span>' + due + revBtn +
+        '<span class="title">' + linkTitle(f.title, f.detail) + second + '</span>' + due + noteBtn + revBtn +
         '<button class="btn small" onclick="factAction(' + f.id + ',\'complete\')">done</button>' +
         '<button class="btn small ghost" onclick="factAction(' + f.id + ',\'dismiss\')">✕</button></div>';
     }).join('');
@@ -689,9 +721,30 @@ async function loadBrain() {
   if (b.reminders.length) {
     rem.innerHTML = b.reminders.map(r =>
       '<div class="fact"><span class="pill ' + esc(r.kind) + '">' + esc(r.kind) + '</span>' +
-      '<span class="title">' + esc(r.title) + (r.remaining > 1 ? ' <span class="hint">(' + r.remaining + ' scheduled)</span>' : '') + '</span>' +
+      '<span class="title">' + esc(r.title) + (r.remaining > 1 ? ' <span class="hint">(' + r.remaining + ' scheduled)</span>' : '') +
+      (r.note ? '<span class="sub"><span class="note">' + esc(r.note) + '</span></span>' : '') + '</span>' +
       '<span class="due">next ' + fmtDate(r.fire_ts) + '</span></div>').join('');
   } else rem.innerHTML = '<div class="empty">no reminders scheduled</div>';
+}
+
+function editNote(id) {
+  editingNote = id;
+  renderBrain();
+  const el = document.getElementById('note-input-' + id);
+  if (el) { el.focus(); el.select(); }
+}
+
+function noteKey(e, id) {
+  if (e.key === 'Enter') saveNote(id);
+  if (e.key === 'Escape') { editingNote = null; renderBrain(); }
+}
+
+async function saveNote(id) {
+  const el = document.getElementById('note-input-' + id);
+  const note = el ? el.value.trim() : '';
+  await api('/api/fact', {method:'POST', body: JSON.stringify({action:'note', id:id, note:note})});
+  editingNote = null;
+  loadBrain();
 }
 
 async function factAction(id, action) {
@@ -704,11 +757,12 @@ async function createFact() {
   if (!title) return;
   const due = document.getElementById('new-due').value;
   const time = document.getElementById('new-time').value; // "HH:MM" or ""
-  const body = {action:'create', title:title};
+  const body = {action:'create', title:title, note:document.getElementById('new-note').value.trim()};
   // Local date + chosen time (09:00 when no time picked).
   if (due) body.due_ts = new Date(due + 'T' + (time || '09:00')).getTime()/1000;
   await api('/api/fact', {method:'POST', body: JSON.stringify(body)});
   document.getElementById('new-title').value = '';
+  document.getElementById('new-note').value = '';
   document.getElementById('new-time').value = '';
   loadBrain();
 }
@@ -957,9 +1011,12 @@ function showDay(k) {
       actions += '<button class="btn small" onclick="markRevDone(' + it.reminder_id + ')">did it ✓</button>';
     if (it.status === 'upcoming' || it.status === 'due')
       actions += '<a class="btn small ghost" style="text-decoration:none" target="_blank" href="' + gcalUrl(it) + '">+ GCal</a>';
+    // Your note from Brain rides along, so the calendar says which lecture
+    // an entry actually was.
+    const sub = it.note ? '<span class="sub"><span class="note">' + esc(it.note) + '</span></span>' : '';
     return '<div class="fact"><span class="pill" style="color:' + histColor(it) + '">' + histStatusLabel(it) + '</span>' +
       '<span class="hint" style="min-width:70px">' + fmtTime(it.ts) + '</span>' +
-      '<span class="title">' + histIcon(it) + ' ' + linkTitle(it.title, it.url) + revN + '</span>' + actions + '</div>';
+      '<span class="title">' + histIcon(it) + ' ' + linkTitle(it.title, it.url) + revN + sub + '</span>' + actions + '</div>';
   }).join('') : '<div class="empty">nothing on this day</div>';
   if (histMode !== '3mo') redrawCal(); // refresh the selection highlight
 }

@@ -159,7 +159,8 @@ final class Api {
                 let kind = body["kind"] as? String ?? "note"
                 let id = store.addFact(kind: kind, title: title,
                                        detail: body["detail"] as? String ?? "",
-                                       dueTs: due, source: "dashboard")
+                                       dueTs: due, source: "dashboard",
+                                       note: body["note"] as? String ?? "")
                 return ("200 OK", ct, Api.json(["ok": true, "id": id ?? -1]), [:])
             case "complete", "dismiss":
                 guard let id = body["id"] as? Int else {
@@ -172,6 +173,13 @@ final class Api {
                     return ("400 Bad Request", ct, Api.json(["error": "missing id"]), [:])
                 }
                 store.addRevisionLadder(factId: Int64(id))
+                return ("200 OK", ct, Api.json(["ok": true]), [:])
+            case "note":
+                // Your own subtitle for the item — "" clears it.
+                guard let id = body["id"] as? Int else {
+                    return ("400 Bad Request", ct, Api.json(["error": "missing id"]), [:])
+                }
+                store.setFactNote(id: Int64(id), note: body["note"] as? String ?? "")
                 return ("200 OK", ct, Api.json(["ok": true]), [:])
             case "reminder_done":
                 // Mark one revision step as actually completed (History tab).

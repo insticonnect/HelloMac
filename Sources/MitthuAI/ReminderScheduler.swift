@@ -52,18 +52,21 @@ final class ReminderScheduler {
                 (header, body) = ("Reminder", title)
             }
 
-            deliver(header: header, body: body, id: "mitthuai-reminder-\(reminderId)")
+            deliver(header: header, body: body, note: r.str("note"),
+                    id: "mitthuai-reminder-\(reminderId)")
             store.markReminderFired(id: reminderId)
         }
     }
 
-    private func deliver(header: String, body: String, id: String) {
+    private func deliver(header: String, body: String, note: String, id: String) {
         guard notificationsAllowed, Bundle.main.bundleIdentifier != nil else {
-            print("MitthuAI Reminder (notifications off): \(header) — \(body)")
+            print("MitthuAI Reminder (notifications off): \(header) — \(body)\(note.isEmpty ? "" : " — \(note)")")
             return
         }
         let content = UNMutableNotificationContent()
         content.title = header
+        // The note you wrote in Brain — the nudge says *which* lecture it means.
+        if !note.isEmpty { content.subtitle = note }
         content.body = body
         content.sound = .default
         let request = UNNotificationRequest(identifier: id, content: content, trigger: nil)
