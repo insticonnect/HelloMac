@@ -52,6 +52,7 @@ swiftc \
     Sources/HelloMac/Digest.swift \
     Sources/HelloMac/HttpServer.swift \
     Sources/HelloMac/Api.swift \
+    Sources/HelloMac/CalendarExport.swift \
     Sources/HelloMac/McpServer.swift \
     Sources/HelloMac/DashboardHTML.swift \
     Sources/HelloMac/MenuBarView.swift \
