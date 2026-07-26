@@ -69,6 +69,8 @@ final class Store {
         // Additive migration for DBs created before the `model` column existed.
         // (ALTER errors harmlessly if the column already exists.)
         db.exec("ALTER TABLE embeddings ADD COLUMN model TEXT DEFAULT '';")
+        // When a revision was actually completed (status 'done'), for history.
+        db.exec("ALTER TABLE reminders ADD COLUMN done_ts REAL;")
         // Prior builds only ever used the Apple backend, so tag legacy vectors
         // accordingly to keep them visible to semantic search.
         db.exec("UPDATE embeddings SET model = 'apple-nl-en' WHERE model = '' OR model IS NULL;")
@@ -588,6 +590,75 @@ final class Store {
 
     func markReminderFired(id: Int64) {
         db.run("UPDATE reminders SET status = 'fired' WHERE id = ?", [id])
+    }
+
+    /// The user actually did this revision (vs. just receiving the nudge).
+    func markReminderDone(id: Int64) {
+        db.run("UPDATE reminders SET status = 'done', done_ts = ? WHERE id = ? AND status != 'cancelled'",
+               [Date().timeIntervalSince1970, id])
+    }
+
+    /// Everything the History calendar needs for a window: watch events, each
+    /// revision-ladder step with its outcome, and deadline/bill due dates.
+    /// Outcomes: done (revised), missed (day passed, never marked done),
+    /// due (scheduled today, still actionable), upcoming (in the future),
+    /// closed (the parent item was completed/dismissed before this step).
+    func history(from: Double, to: Double) -> [[String: Any]] {
+        var items: [[String: Any]] = []
+        let now = Date().timeIntervalSince1970
+        let todayStart = Calendar.current.startOfDay(for: Date()).timeIntervalSince1970
+
+        // Watch events — the day the video/lecture was first seen.
+        for f in db.query("""
+            SELECT id, title, created_ts FROM facts
+            WHERE kind = 'watched' AND created_ts >= ? AND created_ts < ?
+            ORDER BY created_ts ASC
+            """, [from, to]) {
+            items.append(["type": "watched", "fact_id": f.int("id"), "title": f.str("title"),
+                          "ts": f.double("created_ts"), "status": "watched"])
+        }
+
+        // Revision-ladder steps (interval_idx >= 0; idx -1 is a deadline nudge,
+        // which the deadline item below already represents).
+        for r in db.query("""
+            SELECT r.id AS reminder_id, r.fire_ts, r.interval_idx, r.status AS rstatus,
+                   f.id AS fact_id, f.title, f.status AS fstatus
+            FROM reminders r JOIN facts f ON f.id = r.fact_id
+            WHERE r.interval_idx >= 0 AND r.status != 'cancelled'
+              AND r.fire_ts >= ? AND r.fire_ts < ?
+            ORDER BY r.fire_ts ASC
+            """, [from, to]) {
+            let fireTs = r.double("fire_ts")
+            let status: String
+            if r.str("rstatus") == "done" { status = "done" }
+            else if r.str("fstatus") != "open" { status = "closed" }
+            else if fireTs < todayStart { status = "missed" }
+            else if fireTs <= now { status = "due" }
+            else { status = "upcoming" }
+            items.append(["type": "revision", "reminder_id": r.int("reminder_id"),
+                          "fact_id": r.int("fact_id"), "title": r.str("title"),
+                          "ts": fireTs, "interval_idx": r.int("interval_idx"),
+                          "status": status])
+        }
+
+        // Bills & deadlines, placed on their due date.
+        for f in db.query("""
+            SELECT id, kind, title, due_ts, status FROM facts
+            WHERE kind IN ('bill', 'deadline') AND due_ts IS NOT NULL
+              AND due_ts >= ? AND due_ts < ?
+            ORDER BY due_ts ASC
+            """, [from, to]) {
+            let status: String
+            switch f.str("status") {
+            case "done": status = "done"
+            case "dismissed": status = "closed"
+            default: status = f.double("due_ts") < now ? "missed" : "upcoming"
+            }
+            items.append(["type": "deadline", "fact_id": f.int("id"), "kind": f.str("kind"),
+                          "title": f.str("title"), "ts": f.double("due_ts"), "status": status])
+        }
+
+        return items
     }
 
     /// One row per fact — the NEXT pending reminder plus how many remain — so a
