@@ -111,6 +111,9 @@ final class Store {
         db.exec("ALTER TABLE embeddings ADD COLUMN model TEXT DEFAULT '';")
         // When a revision was actually completed (status 'done'), for history.
         db.exec("ALTER TABLE reminders ADD COLUMN done_ts REAL;")
+        // When a fact was marked done — lets the History calendar place
+        // completed items (even ones without a due date) on the right day.
+        db.exec("ALTER TABLE facts ADD COLUMN done_ts REAL;")
         // Prior builds only ever used the Apple backend, so tag legacy vectors
         // accordingly to keep them visible to semantic search.
         db.exec("UPDATE embeddings SET model = 'apple-nl-en' WHERE model = '' OR model IS NULL;")
@@ -613,7 +616,12 @@ final class Store {
     }
 
     func setFactStatus(id: Int64, status: String) {
-        db.run("UPDATE facts SET status = ? WHERE id = ?", [status, id])
+        if status == "done" {
+            db.run("UPDATE facts SET status = ?, done_ts = ? WHERE id = ?",
+                   [status, Date().timeIntervalSince1970, id])
+        } else {
+            db.run("UPDATE facts SET status = ? WHERE id = ?", [status, id])
+        }
         if status != "open" {
             db.run("UPDATE reminders SET status = 'cancelled' WHERE fact_id = ? AND status = 'pending'", [id])
         }
@@ -648,21 +656,30 @@ final class Store {
         let now = Date().timeIntervalSince1970
         let todayStart = Calendar.current.startOfDay(for: Date()).timeIntervalSince1970
 
+        // Attach a clickable link when the fact's detail is a URL (watched
+        // facts store the video URL there).
+        func withLink(_ item: [String: Any], _ detail: String) -> [String: Any] {
+            var item = item
+            if detail.hasPrefix("http://") || detail.hasPrefix("https://") { item["url"] = detail }
+            return item
+        }
+
         // Watch events — the day the video/lecture was first seen.
         for f in db.query("""
-            SELECT id, title, created_ts FROM facts
+            SELECT id, title, detail, created_ts FROM facts
             WHERE kind = 'watched' AND created_ts >= ? AND created_ts < ?
             ORDER BY created_ts ASC
             """, [from, to]) {
-            items.append(["type": "watched", "fact_id": f.int("id"), "title": f.str("title"),
-                          "ts": f.double("created_ts"), "status": "watched"])
+            items.append(withLink(["type": "watched", "fact_id": f.int("id"), "title": f.str("title"),
+                                   "ts": f.double("created_ts"), "status": "watched"],
+                                  f.str("detail")))
         }
 
         // Revision-ladder steps (interval_idx >= 0; idx -1 is a deadline nudge,
         // which the deadline item below already represents).
         for r in db.query("""
             SELECT r.id AS reminder_id, r.fire_ts, r.interval_idx, r.status AS rstatus,
-                   f.id AS fact_id, f.title, f.status AS fstatus
+                   f.id AS fact_id, f.title, f.detail, f.status AS fstatus
             FROM reminders r JOIN facts f ON f.id = r.fact_id
             WHERE r.interval_idx >= 0 AND r.status != 'cancelled'
               AND r.fire_ts >= ? AND r.fire_ts < ?
@@ -675,16 +692,19 @@ final class Store {
             else if fireTs < todayStart { status = "missed" }
             else if fireTs <= now { status = "due" }
             else { status = "upcoming" }
-            items.append(["type": "revision", "reminder_id": r.int("reminder_id"),
-                          "fact_id": r.int("fact_id"), "title": r.str("title"),
-                          "ts": fireTs, "interval_idx": r.int("interval_idx"),
-                          "status": status])
+            items.append(withLink(["type": "revision", "reminder_id": r.int("reminder_id"),
+                                   "fact_id": r.int("fact_id"), "title": r.str("title"),
+                                   "ts": fireTs, "interval_idx": r.int("interval_idx"),
+                                   "status": status],
+                                  r.str("detail")))
         }
 
-        // Bills & deadlines, placed on their due date.
+        // Every non-watched item with a due date — bills, deadlines, and
+        // items you add in the Brain tab — placed on its due date. Marking
+        // one done in Brain shows up here as done.
         for f in db.query("""
-            SELECT id, kind, title, due_ts, status FROM facts
-            WHERE kind IN ('bill', 'deadline') AND due_ts IS NOT NULL
+            SELECT id, kind, title, detail, due_ts, status FROM facts
+            WHERE kind != 'watched' AND due_ts IS NOT NULL
               AND due_ts >= ? AND due_ts < ?
             ORDER BY due_ts ASC
             """, [from, to]) {
@@ -694,8 +714,22 @@ final class Store {
             case "dismissed": status = "closed"
             default: status = f.double("due_ts") < now ? "missed" : "upcoming"
             }
-            items.append(["type": "deadline", "fact_id": f.int("id"), "kind": f.str("kind"),
-                          "title": f.str("title"), "ts": f.double("due_ts"), "status": status])
+            items.append(withLink(["type": "deadline", "fact_id": f.int("id"), "kind": f.str("kind"),
+                                   "title": f.str("title"), "ts": f.double("due_ts"), "status": status],
+                                  f.str("detail")))
+        }
+
+        // Completed items with NO due date — placed on the day they were
+        // marked done, so Brain completions always reflect in the calendar.
+        for f in db.query("""
+            SELECT id, kind, title, detail, done_ts FROM facts
+            WHERE kind != 'watched' AND due_ts IS NULL AND status = 'done'
+              AND done_ts IS NOT NULL AND done_ts >= ? AND done_ts < ?
+            ORDER BY done_ts ASC
+            """, [from, to]) {
+            items.append(withLink(["type": "deadline", "fact_id": f.int("id"), "kind": f.str("kind"),
+                                   "title": f.str("title"), "ts": f.double("done_ts"), "status": "done"],
+                                  f.str("detail")))
         }
 
         return items
