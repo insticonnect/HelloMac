@@ -1,6 +1,6 @@
 # mitthuai — website 🦜
 
-The marketing site for **mitthuai / HelloMac** — *your Mac's memory, answerable by Claude.*
+The marketing site for **mitthuai** — *your Mac's memory, answerable by Claude.*
 
 Built with **React 18 + Vite**. Componentized, genuinely interactive (theme toggle, animated
 count-up stats, an "Ask Mitthu" chat demo, tabbed MCP tools, an FAQ accordion, scroll-spy nav,

@@ -1,7 +1,7 @@
 import Foundation
 import Security
 
-/// All persistence for HelloMac: activity events, captured text chunks
+/// All persistence for MitthuAI: activity events, captured text chunks
 /// (with FTS5 + vector index), extracted facts, and reminders.
 final class Store {
     let db: SQLiteDB
@@ -10,9 +10,19 @@ final class Store {
     init() {
         let fm = FileManager.default
         let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        dataDir = appSupport.appendingPathComponent("HelloMac")
+        dataDir = appSupport.appendingPathComponent("MitthuAI")
+        // One-time migration from the pre-rebrand HelloMac data directory, if present.
+        let legacyDir = appSupport.appendingPathComponent("HelloMac")
+        if !fm.fileExists(atPath: dataDir.path) && fm.fileExists(atPath: legacyDir.path) {
+            try? fm.moveItem(at: legacyDir, to: dataDir)
+        }
         try? fm.createDirectory(at: dataDir, withIntermediateDirectories: true, attributes: nil)
-        db = SQLiteDB(path: dataDir.appendingPathComponent("hellomac.db").path)
+        let legacyDB = dataDir.appendingPathComponent("hellomac.db").path
+        let dbPath = dataDir.appendingPathComponent("mitthuai.db").path
+        if !fm.fileExists(atPath: dbPath) && fm.fileExists(atPath: legacyDB) {
+            try? fm.moveItem(atPath: legacyDB, toPath: dbPath)
+        }
+        db = SQLiteDB(path: dbPath)
         migrate()
         ensureToken()
     }
@@ -615,7 +625,7 @@ final class Store {
     }
 
     func dbSizeBytes() -> Int64 {
-        let path = dataDir.appendingPathComponent("hellomac.db").path
+        let path = dataDir.appendingPathComponent("mitthuai.db").path
         let attrs = try? FileManager.default.attributesOfItem(atPath: path)
         return (attrs?[.size] as? Int64) ?? 0
     }

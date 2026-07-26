@@ -1,7 +1,8 @@
 #!/bin/bash
 set -e
 
-APP_NAME="HelloMac"
+APP_NAME="MitthuAI"
+SRC_DIR="Sources/MitthuAI"
 BUILD_DIR="build"
 APP_DIR="${BUILD_DIR}/${APP_NAME}.app"
 
@@ -35,32 +36,36 @@ swiftc \
     -sdk "$SDK_PATH" \
     -target "$TARGET" \
     ${PLUGIN_FLAGS} \
-    Sources/HelloMac/main.swift \
-    Sources/HelloMac/AppDelegate.swift \
-    Sources/HelloMac/Config.swift \
-    Sources/HelloMac/Keychain.swift \
-    Sources/HelloMac/AccountPairing.swift \
-    Sources/HelloMac/RelayClient.swift \
-    Sources/HelloMac/SQLiteDB.swift \
-    Sources/HelloMac/Store.swift \
-    Sources/HelloMac/Embeddings.swift \
-    Sources/HelloMac/AXReader.swift \
-    Sources/HelloMac/Tracker.swift \
-    Sources/HelloMac/ContentCapture.swift \
-    Sources/HelloMac/Extractors.swift \
-    Sources/HelloMac/ReminderScheduler.swift \
-    Sources/HelloMac/Digest.swift \
-    Sources/HelloMac/HttpServer.swift \
-    Sources/HelloMac/Api.swift \
-    Sources/HelloMac/McpServer.swift \
-    Sources/HelloMac/DashboardHTML.swift \
-    Sources/HelloMac/MenuBarView.swift \
+    ${SRC_DIR}/main.swift \
+    ${SRC_DIR}/AppDelegate.swift \
+    ${SRC_DIR}/Config.swift \
+    ${SRC_DIR}/Keychain.swift \
+    ${SRC_DIR}/AccountPairing.swift \
+    ${SRC_DIR}/RelayClient.swift \
+    ${SRC_DIR}/SQLiteDB.swift \
+    ${SRC_DIR}/Store.swift \
+    ${SRC_DIR}/Embeddings.swift \
+    ${SRC_DIR}/AXReader.swift \
+    ${SRC_DIR}/Tracker.swift \
+    ${SRC_DIR}/ContentCapture.swift \
+    ${SRC_DIR}/Extractors.swift \
+    ${SRC_DIR}/ReminderScheduler.swift \
+    ${SRC_DIR}/Digest.swift \
+    ${SRC_DIR}/HttpServer.swift \
+    ${SRC_DIR}/Api.swift \
+    ${SRC_DIR}/McpServer.swift \
+    ${SRC_DIR}/DashboardHTML.swift \
+    ${SRC_DIR}/MenuBarView.swift \
     -o "${APP_DIR}/Contents/MacOS/${APP_NAME}"
 
 echo "Configuring app bundle..."
 cp Info.plist "${APP_DIR}/Contents/Info.plist"
-cp /System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/UserIcon.icns \
-   "${APP_DIR}/Contents/Resources/AppIcon.icns" 2>/dev/null || true
+if [ -d "Resources/AppIcon.iconset" ]; then
+    iconutil -c icns "Resources/AppIcon.iconset" -o "${APP_DIR}/Contents/Resources/AppIcon.icns"
+else
+    cp /System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/UserIcon.icns \
+       "${APP_DIR}/Contents/Resources/AppIcon.icns" 2>/dev/null || true
+fi
 
 echo "Signing (ad-hoc)..."
 codesign --force --deep -s - --entitlements entitlements.plist "${APP_DIR}" || true

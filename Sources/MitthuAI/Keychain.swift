@@ -4,7 +4,7 @@ import Security
 /// Small wrapper over the macOS Keychain for secrets that must never live in
 /// the database (BYO OpenAI key, and later the DB encryption key).
 enum Keychain {
-    private static let service = "com.hellomac.app"
+    private static let service = "com.mitthuai.app"
 
     static func set(_ key: String, _ value: String?) {
         // Always clear the existing item first.

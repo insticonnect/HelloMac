@@ -1,6 +1,6 @@
-# HelloMac 🧠
+# MitthuAI 🦜
 
-Your Mac's memory. HelloMac lives in the menu bar, passively logs what you do
+Your Mac's memory. MitthuAI lives in the menu bar, passively logs what you do
 (apps, window titles, and the **text on your screen** via macOS accessibility),
 and turns it into:
 
@@ -21,21 +21,21 @@ Requires macOS 12+ and Xcode command line tools (`xcode-select --install`).
 
 ```bash
 ./build.sh
-open build/HelloMac.app
+open build/MitthuAI.app
 ```
 
 ### Permissions (first run)
 
-1. **Accessibility** (required) — System Settings → Privacy & Security → Accessibility → enable HelloMac. This is how window titles and on-screen text are read (the same API VoiceOver uses). Relaunch the app after granting.
+1. **Accessibility** (required) — System Settings → Privacy & Security → Accessibility → enable MitthuAI. This is how window titles and on-screen text are read (the same API VoiceOver uses). Relaunch the app after granting.
 2. **Automation** (optional) — prompted the first time a browser URL is read. Powers per-tab URLs in the timeline.
 3. **Notifications** (optional) — for revision/deadline reminders.
 
 ## Dashboard
 
-Click the 🧠 menu bar icon → **Open Dashboard** (it opens `http://localhost:4789/`
+Click the 🦜 menu bar icon → **Open Dashboard** (it opens `http://localhost:4789/`
 with your access token). Tabs:
 
-- **Today** — active/idle time, focus-vs-multitasking score, tracked-event count, category-distribution donut, top-apps chart, and a full session timeline. Each timeline row has inline **Study / Entertainment / Work / Other** chips — tap one to teach HelloMac how to categorize that title.
+- **Today** — active/idle time, focus-vs-multitasking score, tracked-event count, category-distribution donut, top-apps chart, and a full session timeline. Each timeline row has inline **Study / Entertainment / Work / Other** chips — tap one to teach MitthuAI how to categorize that title.
 - **Search** — semantic + keyword search with date filters
 - **Brain** — open items (bills/deadlines/watched/notes), upcoming reminders
 - **Rules** — create categorization rules (app + title-contains → category). A new rule re-tags matching history immediately, including same-title activity within ±10 minutes so a video you flicked away from and back to lands in one bucket. Delete any rule to re-categorize affected activity.
@@ -51,7 +51,7 @@ The Settings tab shows ready-to-copy commands with your token filled in:
 
 **Claude Code:**
 ```bash
-claude mcp add --transport http hellomac http://localhost:4789/mcp \
+claude mcp add --transport http mitthuai http://localhost:4789/mcp \
   --header "Authorization: Bearer <your-token>"
 ```
 
@@ -59,7 +59,7 @@ claude mcp add --transport http hellomac http://localhost:4789/mcp \
 ```json
 {
   "mcpServers": {
-    "hellomac": {
+    "mitthuai": {
       "command": "npx",
       "args": ["mcp-remote", "http://localhost:4789/mcp",
                "--header", "Authorization: Bearer <your-token>"]
@@ -103,7 +103,7 @@ The MCP server also advertises a retrieval **playbook** (via the `initialize`
 
 ## Privacy
 
-- Everything stays in `~/Library/Application Support/HelloMac/hellomac.db`
+- Everything stays in `~/Library/Application Support/MitthuAI/mitthuai.db`
 - Server binds `127.0.0.1` only; every request needs the bearer token
 - Password managers are excluded by default (editable list); secure text fields and private/incognito windows are never read
 - Pause anytime from the menu bar; delete any date range from Settings

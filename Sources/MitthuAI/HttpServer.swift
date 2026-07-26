@@ -32,7 +32,7 @@ final class HttpServer {
     func start() {
         listenSocket = socket(AF_INET, SOCK_STREAM, 0)
         guard listenSocket >= 0 else {
-            print("HelloMac HTTP: socket() failed")
+            print("MitthuAI HTTP: socket() failed")
             return
         }
         var optVal: Int32 = 1
@@ -49,15 +49,15 @@ final class HttpServer {
             }
         }
         guard bindResult >= 0 else {
-            print("HelloMac HTTP: bind failed on port \(port) — is another instance running?")
+            print("MitthuAI HTTP: bind failed on port \(port) — is another instance running?")
             return
         }
         guard listen(listenSocket, 16) >= 0 else {
-            print("HelloMac HTTP: listen failed")
+            print("MitthuAI HTTP: listen failed")
             return
         }
         running = true
-        print("HelloMac HTTP: dashboard at \(dashboardURL)")
+        print("MitthuAI HTTP: dashboard at \(dashboardURL)")
 
         DispatchQueue.global(qos: .utility).async { [weak self] in
             self?.acceptLoop()
@@ -190,8 +190,8 @@ final class HttpServer {
                 return ("200 OK", "text/html; charset=utf-8", Data(DashboardHTML.page.utf8), [:])
             }
             let msg = "<html><body style='font-family:sans-serif;background:#111;color:#eee;padding:3em'>" +
-                      "<h2>HelloMac</h2><p>Missing or invalid token. Open the dashboard from the " +
-                      "HelloMac menu bar icon — it includes your access token.</p></body></html>"
+                      "<h2>MitthuAI</h2><p>Missing or invalid token. Open the dashboard from the " +
+                      "MitthuAI menu bar icon — it includes your access token.</p></body></html>"
             return ("403 Forbidden", "text/html; charset=utf-8", Data(msg.utf8), [:])
         }
 

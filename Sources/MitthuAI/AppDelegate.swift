@@ -23,7 +23,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true]
         let trusted = AXIsProcessTrustedWithOptions(options as CFDictionary)
         if !trusted {
-            print("HelloMac: waiting for Accessibility permission — grant it in System Settings → Privacy & Security → Accessibility, then relaunch if capture stays empty.")
+            print("MitthuAI: waiting for Accessibility permission — grant it in System Settings → Privacy & Security → Accessibility, then relaunch if capture stays empty.")
         }
 
         store = Store()
@@ -54,7 +54,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         relay.start()   // no-op unless an account is paired
 
         setupMenuBar()
-        print("HelloMac: running. Dashboard: \(httpServer.dashboardURL)")
+        print("MitthuAI: running. Dashboard: \(httpServer.dashboardURL)")
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -75,8 +75,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem?.button {
-            button.image = NSImage(systemSymbolName: "brain.head.profile",
-                                   accessibilityDescription: "HelloMac")
+            button.image = NSImage(systemSymbolName: "bird.fill",
+                                   accessibilityDescription: "MitthuAI")
             button.action = #selector(togglePopover(_:))
             button.target = self
         }
