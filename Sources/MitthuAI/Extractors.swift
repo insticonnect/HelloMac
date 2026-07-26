@@ -158,6 +158,7 @@ enum Extractors {
         var timecode = false        // "12:34 / 45:07" — a player's position/duration
         var controls = false        // play/pause alongside fullscreen, mute, speed
         var mediaAssertion = false  // something is holding display sleep off
+        var audio = false           // sound is actually coming out of the Mac
 
         static let none = PlayerSignals()
 
@@ -165,15 +166,17 @@ enum Extractors {
         func merging(_ other: PlayerSignals) -> PlayerSignals {
             return PlayerSignals(timecode: timecode || other.timecode,
                                  controls: controls || other.controls,
-                                 mediaAssertion: mediaAssertion || other.mediaAssertion)
+                                 mediaAssertion: mediaAssertion || other.mediaAssertion,
+                                 audio: audio || other.audio)
         }
     }
 
-    /// "12:34 / 45:07" or "1:02:03 / 2:15:00" — a position/duration pair. Every
-    /// real player draws one, and a wall of video thumbnails never does (those
-    /// show bare durations), which is what keeps this off a YouTube grid.
+    /// "12:34 / 45:07" (a player's time display) or "0:14 of 12:45" (how a
+    /// seek slider reads its value out). Every real player has one of the two,
+    /// and a wall of video thumbnails has neither — those show bare durations —
+    /// which is what keeps this off a YouTube grid.
     private static let timecodeRegex = try! NSRegularExpression(
-        pattern: #"\d{1,2}:\d{2}(:\d{2})?\s*/\s*\d{1,2}:\d{2}"#)
+        pattern: #"\d{1,2}:\d{2}(:\d{2})?\s*(/|of)\s*\d{1,2}:\d{2}"#, options: [.caseInsensitive])
 
     private static let controlWords = [
         "fullscreen", "full screen", "mute", "unmute", "playback speed",
@@ -223,13 +226,14 @@ enum Extractors {
     private static let studyHosts = [
         ".edu", ".ac.in", ".ac.uk", ".edu.au", "moodle", "canvas", "blackboard",
         "classroom.google", "coursera", "udemy", "nptel", "swayam", "edx.org",
-        "khanacademy", "unacademy", "vedantu", "byju", "panopto", "echo360"
+        "khanacademy", "unacademy", "vedantu", "byju", "physics wallah", "pw.live",
+        "panopto", "echo360"
     ]
 
     private static let studyPhrases = [
         "lecture", "tutorial", "course", "chapter", "lesson", "module",
         "semester", "syllabus", "practical", "revision", "assignment",
-        "problem set", "walkthrough"
+        "problem set", "walkthrough", "iitm", "online degree"
     ]
     /// Matched on word boundaries so "class" misses "classical" and "unit"
     /// misses "united".
@@ -273,15 +277,38 @@ enum Extractors {
         if videoApps.contains(where: { a.contains($0) }) { add(3, "player app") }
         if signals.timecode { add(3, "timecode") }
         if signals.controls { add(2, "player controls") }
+        if signals.audio { add(2, "audio playing") }
         if signals.mediaAssertion { add(2, "display kept awake") }
         if !u.isEmpty && videoURLMarkers.contains(where: { u.contains($0) }) { add(2, "video url") }
         if knownVideoSource(haystack) { add(2, "known source") }
+        // A learning host (college portal, LMS) tips the scale — a lecture
+        // playing there shouldn't need a brand name to be believed.
+        if !u.isEmpty && studyHosts.contains(where: { u.contains($0) }) { add(1, "learning site") }
 
         let direct = signals.timecode || signals.controls
             || videoApps.contains(where: { a.contains($0) })
             || (!u.isEmpty && videoURLMarkers.contains(where: { u.contains($0) }))
             || knownVideoSource(a)
         return (score, direct, reasons)
+    }
+
+    /// Last ~20 detection decisions, so "why didn't my lecture appear?" can be
+    /// answered from Settings instead of a terminal. Written on the main
+    /// thread, read from HTTP server threads — hence the lock.
+    private static var _detectionLog: [String] = []
+    private static let logLock = NSLock()
+
+    static var detectionLog: [String] {
+        logLock.lock(); defer { logLock.unlock() }
+        return _detectionLog
+    }
+
+    private static func logDecision(_ line: String) {
+        print("MitthuAI: \(line)")
+        let stamp = McpServer.fmtTime(Date().timeIntervalSince1970)
+        logLock.lock(); defer { logLock.unlock() }
+        _detectionLog.append("[\(stamp)] \(line)")
+        if _detectionLog.count > 20 { _detectionLog.removeFirst(_detectionLog.count - 20) }
     }
 
     /// Called when a window session ends. `duration` is how long that one title
@@ -297,14 +324,14 @@ enum Extractors {
         let (score, direct, reasons) = videoScore(app: app, title: title, url: url, signals: signals)
         let why = reasons.joined(separator: ", ")
         guard blind ? knownVideoSource(haystack) : (score >= 3 && direct) else {
-            if score > 0 { print("MitthuAI: not a video (score \(score): \(why)) — \(title.prefix(60))") }
+            if score > 0 { logDecision("not a video (score \(score): \(why)) — \(title.prefix(60))") }
             return
         }
 
         // Strong evidence is trusted sooner; a weak match still has to hold the
         // screen for the old five minutes before it counts as watched.
-        guard duration >= (score >= 5 ? 120 : 300) else {
-            print("MitthuAI: video seen but only \(Int(duration))s (score \(score): \(why)) — \(title.prefix(60))")
+        guard duration >= (score >= 5 ? 60 : 300) else {
+            logDecision("video seen but only \(Int(duration))s (score \(score): \(why)) — \(title.prefix(60))")
             return
         }
 
@@ -313,7 +340,7 @@ enum Extractors {
             .replacingOccurrences(of: " – YouTube", with: "")
         guard let factId = store.addFact(kind: "watched", title: String(cleanTitle.prefix(140)),
                                          detail: url ?? "", dueTs: nil, source: app) else { return }
-        print("MitthuAI: watched (score \(score): \(why)) — \(cleanTitle.prefix(60))")
+        logDecision("watched (score \(score): \(why)) — \(cleanTitle.prefix(60))")
 
         // Study material auto-enrolls in the revision ladder (configurable).
         // Anything a user rule files under Study counts as well — that's the

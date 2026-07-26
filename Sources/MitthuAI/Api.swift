@@ -40,6 +40,7 @@ final class Api {
                 "openai_key_set": (Keychain.get("openai_api_key")?.isEmpty == false),
                 "excluded_apps": Config.shared.excludedApps.sorted(),
                 "video_sources": Config.shared.videoSources,
+                "detection_log": Extractors.detectionLog,
                 "account_paired": AccountPairing.shared.isPaired,
                 "relay_enabled": Config.shared.relayEnabled,
                 "launch_at_login": LoginItem.isEnabled,

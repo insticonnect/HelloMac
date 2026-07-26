@@ -118,20 +118,31 @@ screen long enough, it weighs signals it already collects:
 
 | Signal | Weight |
 |---|---|
-| A player timecode on screen (`12:34 / 45:07`) | 3 |
+| A player timecode on screen (`12:34 / 45:07`, or a seek bar's `0:14 of 12:45`) | 3 |
 | A native player app (VLC, IINA, QuickTime…) | 3 |
-| Player controls — play/pause with fullscreen, mute or speed | 2 |
-| The display being held awake (what playback does) | 2 |
+| Player controls — play/pause buttons with fullscreen, mute or speed | 2 |
+| Sound actually playing on the Mac | 2 |
+| The display being held awake (what video playback does) | 2 |
 | A video-shaped link (`/watch`, `/lecture`, `/embed/`…) | 2 |
 | A known video site, built-in list or your own | 2 |
+| A learning host (`.edu`, `.ac.in`, Moodle, Canvas…) | 1 |
+
+Player buttons and seek sliders are read through the same accessibility tree
+as everything else, so an **embedded** player — a YouTube iframe inside a
+college portal like IITM SEEK, a Physics Wallah player, an audio-only
+lecture — is recognised even though the page URL and title never say "video".
 
 Three points make it a video — including at least one signal from the window
-itself (a timecode, controls, a player app, a video link), so a video call
-keeping the display awake can't turn plain browsing into "watched". Strong
-evidence (5+) counts after 2 minutes, anything weaker still needs the full
-5 minutes — so a page you left open isn't a video, and neither is the YouTube
-homepage you never pressed play on. Tab-switching away doesn't reset the
-clock: watch time for a title keeps adding up across gaps of up to 10 minutes.
+itself (a timecode, controls, a player app, a video link), so a video call or
+background music can't turn plain browsing into "watched". Strong evidence
+(5+) counts after 1 minute, anything weaker still needs the full 5 minutes —
+so a page you left open isn't a video, and neither is the YouTube homepage you
+never pressed play on. Tab-switching away doesn't reset the clock: watch time
+for a title keeps adding up across gaps of up to 10 minutes.
+
+**Settings → Video sources** also shows the last 20 detection decisions with
+their scores and reasons — if something you watched didn't appear in Brain,
+the line there says exactly why.
 
 It then enrols in the **1/3/7/14/30-day revision ladder** if it looks like study
 material: a learning host (`.edu`, `.ac.in`, Moodle, Canvas, Classroom, NPTEL,

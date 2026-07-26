@@ -2,6 +2,7 @@ import Cocoa
 import Foundation
 import Combine
 import IOKit.pwr_mgt
+import CoreAudio
 
 /// The activity logger: samples the frontmost app/window every second,
 /// writes timeline events on change, detects idle, and flags watched videos.
@@ -69,6 +70,9 @@ final class Tracker: ObservableObject {
             nowIsIdle = false // Watching a video counts as active.
         }
         if mediaAwake && !nowIsIdle { sessionSignals.mediaAssertion = true }
+        // Sound actually coming out of the speakers — catches audio-only
+        // lectures and video embeds alike (system-wide, so corroborating only).
+        if !nowIsIdle && isAudioPlaying() { sessionSignals.audio = true }
 
         var activeApp = "Idle"
         var activeTitle = ""
@@ -141,12 +145,32 @@ final class Tracker: ObservableObject {
             d.lastSeen = nowTs
             dwell[key] = d
             dwell = dwell.filter { nowTs - $0.value.lastSeen < 600 }
-            if d.total >= 120 {
+            if d.total >= 60 {
                 Extractors.detectWatched(app: lastAppName, title: lastWindowTitle,
                                          url: lastURL, ts: d.firstTs,
                                          duration: d.total, signals: d.signals, store: store)
             }
         }
+    }
+
+    /// Whether the default output device is playing for anyone right now.
+    /// Public CoreAudio, no permissions, a couple of mach calls per tick.
+    private func isAudioPlaying() -> Bool {
+        var deviceId = AudioDeviceID(kAudioObjectUnknown)
+        var size = UInt32(MemoryLayout<AudioDeviceID>.size)
+        var addr = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain)
+        guard AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject),
+                                         &addr, 0, nil, &size, &deviceId) == noErr,
+              deviceId != kAudioObjectUnknown else { return false }
+
+        var running: UInt32 = 0
+        size = UInt32(MemoryLayout<UInt32>.size)
+        addr.mSelector = kAudioDevicePropertyDeviceIsRunningSomewhere
+        guard AudioObjectGetPropertyData(deviceId, &addr, 0, nil, &size, &running) == noErr else { return false }
+        return running != 0
     }
 
     private func isDisplaySleepPrevented() -> Bool {
