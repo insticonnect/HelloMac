@@ -14,12 +14,19 @@ export default function Privacy() {
       <div className="container">
         <Reveal className="privacy-card">
           <div className="privacy-ic">🔒</div>
-          <h2>Private by design</h2>
+          <h2>It watches your screen. So it had better be trustworthy.</h2>
           <p>
             Your activity, text, and search index live only on your Mac, in{' '}
-            <code>~/Library/Application&nbsp;Support/MitthuAI</code>. mitthuai's servers are just a
-            tunnel — they route Claude's questions to your Mac and the answers back. We don't store
-            your memory and we don't read your email; Google is used solely to sign you in.
+            <code>~/Library/Application&nbsp;Support/MitthuAI</code> — one SQLite file, behind a
+            server bound to <code>127.0.0.1</code> that needs a bearer token. Search runs on
+            Apple's on-device embeddings. No telemetry, no analytics, no account.
+          </p>
+          <p>
+            <strong>Nothing leaves your Mac unless you switch it on</strong> — and only three
+            things can be: turbo search with your own OpenAI key, web access for Claude.ai, and
+            Apple's on-device model. All off by default. Secure fields, password managers and
+            private windows are never read, and because it's open source you don't have to take
+            our word for any of it.
           </p>
           <div className="privacy-tags">
             {TAGS.map((t) => (

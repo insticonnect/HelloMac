@@ -8,17 +8,18 @@ export default function Hero() {
       <div className="container hero-grid">
         <Reveal className="hero-copy">
           <span className="pill">
-            <span className="pill-dot" /> 100% local · no cloud, no telemetry
+            <span className="pill-dot" /> 100% on your Mac · open source · no account
           </span>
           <h1>
-            Your Mac's memory,
+            Where did your time go?
             <br />
-            <span className="grad">answerable by Claude.</span>
+            <span className="grad">Your Mac already knows.</span>
           </h1>
           <p className="lead">
-            Meet <strong>Mitthu</strong> 🦜 — the parrot that never forgets. mitthuai quietly
-            remembers what you read, watch, and work on, then lets Claude search it, remind you to
-            revise, and tell you what's important today. All on your Mac.
+            Meet <strong>Mitthu</strong> 🦜 — the parrot that never forgets. MitthuAI sits in your
+            menu bar and quietly remembers what you actually did: every app, every tab, every
+            lecture, every deadline that flashed past in an email. Then it hands the day back to
+            you — searchable, sorted, and honest.
           </p>
           <div className="cta-row">
             <a className="btn btn-primary" href="#download">
@@ -34,7 +35,9 @@ export default function Hero() {
               Try the demo
             </a>
           </div>
-          <p className="micro">Free to use · Apple Silicon &amp; Intel · macOS 12+</p>
+          <p className="micro">
+            Free &amp; open source · macOS 12+ · Apple Silicon &amp; Intel · no sign-up
+          </p>
         </Reveal>
 
         <Reveal className="hero-visual" aria-hidden="true">

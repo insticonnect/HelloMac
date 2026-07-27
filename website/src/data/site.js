@@ -1,6 +1,6 @@
 // Central place for repeated content so it's easy to tweak.
 
-export const GITHUB_URL = 'https://github.com/insticonnect/mitthuai'
+export const GITHUB_URL = 'https://github.com/insticonnect/HelloMac'
 
 export const NAV_LINKS = [
   { href: '#features', label: 'Features' },
@@ -11,61 +11,61 @@ export const NAV_LINKS = [
 ]
 
 export const STATS = [
-  { value: 100, suffix: '%', label: 'runs on your Mac', sub: 'nothing leaves the device' },
-  { value: 0, suffix: '', label: 'cloud servers store your data', sub: 'no telemetry, ever' },
+  { value: 100, suffix: '%', label: 'runs on your Mac', sub: 'one SQLite file on your disk' },
+  { value: 0, suffix: '', label: 'accounts to create', sub: 'no sign-up, no telemetry' },
   { value: 7, suffix: '', label: 'native tools for Claude', sub: 'via the MCP server' },
   { value: 5, suffix: '×', label: 'spaced-repetition nudges', sub: '1 · 3 · 7 · 14 · 30 days' },
 ]
 
 export const FEATURES = [
   {
-    ic: '🧠',
-    title: 'Remembers everything',
-    body: 'Apps, window titles, and on-screen text become a private, searchable timeline. "When did I watch that lecture?" — answered instantly.',
+    ic: '⏱️',
+    title: 'See where your time actually goes',
+    body: 'No timers to start. Every app and window becomes a session, sorted into Study, Entertainment or Work, with a focus score that separates real work from tab-flicking.',
   },
   {
-    ic: '🔁',
-    title: 'Never forget to revise',
-    body: 'Watched a study video? Get spaced-repetition nudges after 1, 3, 7, 14 and 30 days — so what you learn actually sticks.',
-  },
-  {
-    ic: '✅',
-    title: "Knows what's due",
-    body: 'Bills and deadlines you see on screen turn into tasks with dates. Ask "what\'s important today?" and get a real answer.',
-  },
-  {
-    ic: '🔌',
-    title: 'Plugs into Claude',
-    body: 'Connect once and Claude answers from your memory — in the terminal, on desktop, and on the web via a native MCP server.',
+    ic: '📈',
+    title: 'Zoom out to months and a year',
+    body: 'Week, month and three-month views, each compared against the period before, with a month-by-month table and chart. Watch a habit form — or quietly fall apart.',
   },
   {
     ic: '🔎',
-    title: 'Hybrid search',
-    body: 'BM25 keyword + vector similarity with reciprocal-rank fusion, rerank, and time filters. Duplicate screens are hashed out.',
+    title: "Search everything you've seen",
+    body: 'Not filenames — the actual text that was on your screen. Semantic and keyword search together, so "that article about attention heads" finds it anyway.',
+  },
+  {
+    ic: '✅',
+    title: "Catches what you'd forget",
+    body: 'Deadlines, bills and meetings lifted off the screen with the right date, the sender, and the meeting link. Lectures enrol themselves in a 1/3/7/14/30-day revision ladder.',
   },
   {
     ic: '🔒',
     title: 'Private by design',
-    body: 'Everything lives in one SQLite file on your Mac. The server binds to localhost and every request needs a bearer token.',
+    body: 'One SQLite file on your disk, a server bound to localhost behind a bearer token, on-device Apple embeddings. Nothing leaves your Mac unless you switch it on.',
+  },
+  {
+    ic: '🔌',
+    title: 'Then: ask Claude about it',
+    body: 'Connect once and Claude answers from your memory through a native MCP server — 7 tools. Entirely optional; MitthuAI is a complete app without it.',
   },
 ]
 
 export const STEPS = [
   {
-    title: 'Download & install',
-    body: 'Grab the app from this site and drag it in. Apple Silicon and Intel, macOS 12+.',
+    title: 'Download & open it',
+    body: 'One drag. No installer, no account, no sign-up. Apple Silicon and Intel, macOS 12+.',
   },
   {
     title: 'Grant Accessibility',
-    body: 'One permission lets Mitthu read window text — the same API screen readers use. Nothing is sent anywhere.',
+    body: 'One permission lets Mitthu read window text — the same macOS API screen readers use. It never leaves your Mac.',
   },
   {
-    title: 'Sign in with Google',
-    body: 'Used for login only — we never read your email. It just pairs your Mac to the secure tunnel.',
+    title: 'Forget about it',
+    body: 'It lives in the menu bar with no dock icon and no window, and starts with your Mac.',
   },
   {
-    title: 'Ask Claude',
-    body: 'Your memory stays on your Mac; Claude reaches it to answer questions and set reminders.',
+    title: 'Open the dashboard when curious',
+    body: 'localhost:4789 — whenever you want to know where the week went. Connecting Claude is optional, and comes later.',
   },
 ]
 
@@ -132,22 +132,30 @@ export const TOOLS = [
 export const FAQS = [
   {
     q: 'Does any of my data leave my Mac?',
-    a: 'No. Your activity, text, and search index live only in a SQLite file on your Mac. The local server binds to 127.0.0.1 and every request needs a bearer token. mitthuai\'s servers are only a tunnel that routes Claude\'s questions to your Mac and the answers back — they never store your memory.',
+    a: 'Not unless you switch on one of three optional features, each off by default: turbo search (sends captured text to OpenAI using your own key), web access for Claude.ai (routes Claude\'s questions through a relay to your Mac — your memory stays on the device), and Apple\'s on-device model (which never leaves the Mac anyway). Leave them off and MitthuAI makes no network requests at all: your activity, text and search index live only in a SQLite file on your disk, behind a server bound to 127.0.0.1 with a bearer token.',
   },
   {
     q: 'Why does it need Accessibility permission?',
-    a: 'That permission lets Mitthu read window titles and on-screen text — the same macOS API screen readers use. It\'s how your timeline and search get built. Secure text fields, password managers, and incognito windows are never read.',
+    a: 'That permission lets Mitthu read window titles and on-screen text — the same macOS API screen readers use. It\'s how your timeline and search get built. Secure text fields, password managers, and private browsing windows are never read.',
+  },
+  {
+    q: 'Do I need an account?',
+    a: 'No. There is no sign-up, no login and no paid tier — download it and it works. An account only exists for the optional Claude.ai-web connection; Claude Code and Claude Desktop connect over localhost and need nothing.',
+  },
+  {
+    q: 'Why is it Mac only?',
+    a: 'It\'s built directly on macOS — the accessibility APIs, IOKit power assertions, CoreAudio, Apple\'s on-device embeddings, Apple Events for browser URLs. That\'s what makes it fast and private, and it\'s also what makes it Mac-only. A cross-platform version would be a different, worse app.',
   },
   {
     q: 'What is MCP and why should I care?',
-    a: 'MCP (Model Context Protocol) is how Claude connects to external tools. mitthuai ships a native MCP server, so Claude Code, Claude Desktop, and the web app can search your memory, check what\'s due, and set reminders — as first-class tools.',
+    a: 'MCP (Model Context Protocol) is how Claude connects to external tools. MitthuAI ships a native MCP server with 7 tools, so Claude Code and Claude Desktop can search your memory, check what\'s due, and set reminders — as first-class tools. It\'s optional: the app is complete without it.',
   },
   {
     q: 'Is it free? What are the requirements?',
-    a: 'Free to use. It runs on macOS 12+ on both Apple Silicon and Intel, and lives quietly in your menu bar. On-device Apple embeddings are the default; you can optionally bring your own OpenAI key for multilingual turbo search.',
+    a: 'Free and open source — 5,713 lines of Swift with zero dependencies, which you can read and build yourself in about a minute. It runs on macOS 12+ on both Apple Silicon and Intel, and lives quietly in your menu bar.',
   },
   {
     q: 'Can I pause or delete my data?',
-    a: 'Anytime. Pause capture from the menu bar, exclude specific apps, or purge any date range from Settings. It\'s your file on your disk — you\'re always in control.',
+    a: 'Anytime. Pause capture from the menu bar, exclude specific apps, turn off text or URL capture separately, or purge any date range from Settings. It\'s your file on your disk — you\'re always in control.',
   },
 ]
