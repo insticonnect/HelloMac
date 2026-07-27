@@ -691,6 +691,17 @@ final class Store {
         db.run("UPDATE facts SET note = ? WHERE id = ?", [Store.cleanNote(note), id])
     }
 
+    func setFactTitle(id: Int64, title: String) {
+        let t = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty else { return }
+        db.run("UPDATE facts SET title = ? WHERE id = ?", [String(t.prefix(140)), id])
+    }
+
+    /// The source line an extracted item came from, for re-reading it later.
+    func factDetail(id: Int64) -> String? {
+        return db.query("SELECT detail FROM facts WHERE id = ?", [id]).first?.str("detail")
+    }
+
     func setNeedsReview(id: Int64, _ flag: Bool) {
         db.run("UPDATE facts SET needs_review = ? WHERE id = ?", [flag ? 1 : 0, id])
     }
@@ -743,6 +754,31 @@ final class Store {
         if fixed + flagged > 0 {
             print("MitthuAI: re-read stored deadlines — \(fixed) corrected, \(flagged) flagged for review")
         }
+    }
+
+    /// Clear out items the old, looser extractor created: marketing urgency
+    /// ("Shop now before it's too late"), clipped fragments, and anything whose
+    /// source line turns out to hold no date at all. Dismissed rather than
+    /// deleted — they stay recoverable, they just stop nagging.
+    func dropJunkExtractedFacts() {
+        guard setting("junk_cleanup_v3") != "1" else { return }
+        var dropped = 0
+        for f in db.query("""
+            SELECT id, detail, title FROM facts
+            WHERE status = 'open' AND kind IN ('deadline', 'bill') AND source != 'dashboard'
+            """) {
+            let id = Int64(f.int("id"))
+            let line = f.str("detail").isEmpty ? f.str("title") : f.str("detail")
+            let junk = DateParse.rejectionReason(in: line) != nil
+                || DateParse.candidateReason(in: line) == nil
+                || DateParse.dueDate(in: line) == nil
+            guard junk else { continue }
+            db.run("UPDATE facts SET status = 'dismissed' WHERE id = ?", [id])
+            db.run("UPDATE reminders SET status = 'cancelled' WHERE fact_id = ? AND status = 'pending'", [id])
+            dropped += 1
+        }
+        setSetting("junk_cleanup_v3", "1")
+        if dropped > 0 { print("MitthuAI: cleared \(dropped) junk deadline(s) the old extractor had created") }
     }
 
     private static func cleanNote(_ note: String) -> String {

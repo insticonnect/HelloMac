@@ -26,12 +26,83 @@ enum DateParse {
     }
 
     /// Words that mean "this line is about a deadline". Kept here because the
-    /// date has to be anchored to whichever one matched.
+    /// date has to be anchored to whichever one matched. Note there is no bare
+    /// "before": it is a preposition, and it matched half the marketing copy
+    /// on screen ("Shop now before it's too late").
     static let dueKeywords = [
         "due", "pending", "expires", "expiry", "deadline", "pay by",
         "payment due", "renew", "overdue", "last date", "submit by",
-        "apply by", "closes on", "valid till", "valid until", "before"
+        "apply by", "closes on", "valid till", "valid until"
     ]
+
+    /// A date said in words rather than digits. On its own this means nothing —
+    /// "tomorrow" appears in plenty of chatter — so it only counts alongside an
+    /// action word below.
+    static let relativeWords = [
+        "tomorrow", "today", "tonight", "this week", "next week", "this weekend",
+        "this monday", "this tuesday", "this wednesday", "this thursday",
+        "this friday", "this saturday", "this sunday",
+        "next monday", "next tuesday", "next wednesday", "next thursday",
+        "next friday", "next saturday", "next sunday"
+    ]
+
+    /// Something the user would actually have to do.
+    static let actionWords = [
+        "join", "register", "registration", "apply", "submit", "pay", "renew",
+        "expires", "closes", "ends", "starts", "begins", "deadline", "due",
+        "webinar", "meeting", "session", "interview", "exam", "class", "live",
+        "rsvp", "book", "confirm", "attend", "enroll", "last chance"
+    ]
+
+    /// Marketing copy dressed up as urgency. These lines are why Brain filled
+    /// with "Shop now before it's too late".
+    static let promoWords = [
+        "shop now", "buy now", "order now", "% off", "discount", "coupon",
+        "sale", "deal", "offer ends", "limited time", "hurry", "too late",
+        "free trial", "upgrade now", "unsubscribe", "keep them yours",
+        "best price", "lowest price", "cart", "checkout"
+    ]
+
+    private static let inNDaysRegex = try! NSRegularExpression(
+        pattern: #"\bin\s+\d{1,3}\s+days?\b"#, options: [.caseInsensitive])
+
+    /// Why this line is worth reading for a date — nil when it isn't.
+    /// Either an explicit deadline word, or a spoken date next to something
+    /// the user has to do ("Join us tomorrow").
+    static func candidateReason(in line: String) -> String? {
+        let lower = line.lowercased()
+        if let kw = dueKeywords.first(where: { lower.contains($0) }) {
+            return "deadline word \"\(kw)\""
+        }
+        let relative = relativeWords.first(where: { lower.contains($0) })
+            ?? (has(inNDaysRegex, lower) ? "in N days" : nil)
+        if let rel = relative, let act = actionWords.first(where: { lower.contains($0) }) {
+            return "\"\(rel)\" + \"\(act)\""
+        }
+        return nil
+    }
+
+    /// Why this line must NOT become a task, even though it mentions a date.
+    static func rejectionReason(in line: String) -> String? {
+        let lower = line.lowercased()
+        if let p = promoWords.first(where: { lower.contains($0) }) {
+            return "promotional (\"\(p)\")"
+        }
+        // Fragments like "Expires today" or a clipped "urn Before 31st July"
+        // can't be acted on later, whatever date they carry.
+        let words = lower.split(whereSeparator: { !$0.isLetter && !$0.isNumber })
+        if words.count < 3 || line.count < 15 {
+            return "too fragmentary to act on (\(words.count) words)"
+        }
+        return nil
+    }
+
+    /// True when a date in this line was spoken rather than written out, so a
+    /// model answer can't be checked against digits in the text.
+    static func hasRelativeWord(in line: String) -> Bool {
+        let lower = line.lowercased()
+        return relativeWords.contains(where: { lower.contains($0) }) || has(inNDaysRegex, lower)
+    }
 
     /// Sanity window: a deadline in the past is a stale mail, and one more
     /// than two years out is almost always a misparse.
@@ -53,12 +124,18 @@ enum DateParse {
     /// apply:" and the date itself on separate lines.
     static func dueDate(in line: String, nextLine: String? = nil) -> Found? {
         if let f = parse(line) { return f }
-        if let next = nextLine, !next.isEmpty, keywordRange(in: line) != nil {
-            // The keyword was on this line, so a bare date on the next one
-            // belongs to it.
-            return parse(next, assumeAnchored: true)
-        }
-        return nil
+        // Only continue onto the next line when this one is visibly unfinished
+        // ("Last date to apply:") and that next line is a short, mostly-date
+        // string. Anything looser scrapes dates off unrelated elements sitting
+        // nearby on screen, which is how "Renew to keep them yours." acquired a
+        // due date it never mentioned.
+        guard let next = nextLine?.trimmingCharacters(in: .whitespaces), !next.isEmpty,
+              keywordRange(in: line) != nil,
+              line.hasSuffix(":") || line.hasSuffix("-") || line.hasSuffix("–"),
+              next.count <= 40,
+              let f = parse(next, assumeAnchored: true),
+              Double(f.matched.count) >= Double(next.count) * 0.6 else { return nil }
+        return f
     }
 
     /// Where the deadline keyword sits, so the date can be anchored to it.
@@ -126,6 +203,11 @@ enum DateParse {
 
         if !hadTime {
             value = cal.startOfDay(for: value).addingTimeInterval(9 * 3600)
+            // Something due today, spotted after 9am, would otherwise be born
+            // overdue and show up red the moment it appears.
+            if value < now, cal.isDateInToday(value) {
+                value = now.addingTimeInterval(3600)
+            }
         }
 
         if value < cal.startOfDay(for: now) {
