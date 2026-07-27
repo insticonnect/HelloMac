@@ -24,6 +24,11 @@ final class Config {
     /// Extra sites/keywords that always count as video, on top of what the
     /// detector works out on its own. One per line in Settings.
     var videoSources: [String] = []
+    /// How to read "12/09/2026" — follow the Mac's region, or pin an order.
+    var dateOrder: DateParse.Order = .auto
+    /// Let Apple's on-device model have a go at deadline lines the parser
+    /// can't resolve. Opt-in: it needs macOS 26 with Apple Intelligence.
+    var modelAssist = false
 
     private weak var store: Store?
 
@@ -42,6 +47,8 @@ final class Config {
             launchAtLogin = v == "1"
             launchAtLoginStored = true
         }
+        if let v = store.setting("date_order"), let o = DateParse.Order(rawValue: v) { dateOrder = o }
+        modelAssist = store.setting("model_assist") == "1"
         if let raw = store.setting("video_sources"), !raw.isEmpty {
             videoSources = raw.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
         }
@@ -64,6 +71,8 @@ final class Config {
         store.setSetting("launch_at_login", launchAtLogin ? "1" : "0")
         store.setSetting("excluded_apps", excludedApps.sorted().joined(separator: "\n"))
         store.setSetting("video_sources", videoSources.joined(separator: "\n"))
+        store.setSetting("date_order", dateOrder.rawValue)
+        store.setSetting("model_assist", modelAssist ? "1" : "0")
     }
 
     func isExcluded(app: String) -> Bool {

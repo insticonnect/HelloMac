@@ -45,69 +45,50 @@ enum Extractors {
 
     // MARK: - Deadline / bill extraction from captured text
 
-    private static let dueKeywords = [
-        "due", "pending", "expires", "expiry", "deadline", "pay by",
-        "payment due", "renew", "overdue", "last date", "submit by"
-    ]
-
     private static let moneyRegex = try! NSRegularExpression(
         pattern: #"[$₹€£]\s?\d[\d,]*(\.\d+)?|(\d[\d,]*(\.\d+)?\s?(USD|INR|EUR|Rs\.?))"#,
         options: [.caseInsensitive])
 
     static func extractFacts(from text: String, source: String, store: Store) {
-        for rawLine in text.split(separator: "\n") {
-            let line = rawLine.trimmingCharacters(in: .whitespaces)
+        let lines = text.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
+        for (i, line) in lines.enumerated() {
             guard line.count > 8 && line.count < 400 else { continue }
             let lower = line.lowercased()
-            guard dueKeywords.contains(where: { lower.contains($0) }) else { continue }
+            guard DateParse.dueKeywords.contains(where: { lower.contains($0) }) else { continue }
 
-            guard let due = parseDate(in: lower) else { continue }
-
-            let range = NSRange(line.startIndex..., in: line)
-            let hasMoney = moneyRegex.firstMatch(in: line, options: [], range: range) != nil
-            let kind = hasMoney ? "bill" : "deadline"
+            let kind = has(moneyRegex, line) ? "bill" : "deadline"
             let title = String(line.prefix(120))
+            // Mail and tables often split "Last date to apply:" from the date,
+            // so the following line counts as part of the same statement.
+            let next = i + 1 < lines.count ? lines[i + 1] : nil
 
-            store.addFact(kind: kind, title: title, detail: line, dueTs: due, source: source)
+            guard let found = DateParse.dueDate(in: line, nextLine: next) else {
+                // Nothing believable here. If the user has switched the
+                // on-device model on, let it have a look — it is the only
+                // caller path, and its answer is verified against this text.
+                ModelAssist.dueDate(in: line) { ts in
+                    if let id = store.addFact(kind: kind, title: title, detail: line,
+                                              dueTs: ts, source: source) {
+                        store.setNeedsReview(id: id, true)
+                        logDecision("date via on-device model: \(DateParse.isoDay(Date(timeIntervalSince1970: ts))) — \(title.prefix(60))")
+                    }
+                }
+                continue
+            }
+
+            let resolved = DateParse.applyOrder(found, order: Config.shared.dateOrder)
+            guard let id = store.addFact(kind: kind, title: title, detail: line,
+                                         dueTs: resolved.ts, source: source) else { continue }
+            if resolved.ambiguous { store.setNeedsReview(id: id, true) }
+            logDecision("date \(DateParse.isoDay(Date(timeIntervalSince1970: resolved.ts))) "
+                        + "from \"\(resolved.matched)\" (\(resolved.via)"
+                        + (resolved.ambiguous ? ", ambiguous — check it" : "") + ") — \(title.prefix(60))")
         }
     }
 
-    /// Parse a due date out of a line of text. Supports:
-    /// "in N days", "tomorrow", "today", 22/07/2026, 2026-07-22, "July 26" / "26 July".
-    static func parseDate(in lower: String) -> Double? {
-        let now = Date()
-        let cal = Calendar.current
-
-        func at9am(_ date: Date) -> Double {
-            let start = cal.startOfDay(for: date)
-            return start.timeIntervalSince1970 + 9 * 3600
-        }
-
-        if let m = firstMatch(#"in\s+(\d{1,3})\s+days?"#, lower), let n = Double(m[1]) {
-            return at9am(now.addingTimeInterval(n * 86400))
-        }
-        if lower.contains("tomorrow") {
-            return at9am(now.addingTimeInterval(86400))
-        }
-        if let m = firstMatch(#"(\d{4})-(\d{2})-(\d{2})"#, lower) {
-            return dateFrom(y: m[1], mo: m[2], d: m[3]).map(at9am)
-        }
-        if let m = firstMatch(#"(\d{1,2})[/-](\d{1,2})[/-](\d{4})"#, lower) {
-            // Ambiguous d/m vs m/d: prefer d/m (IN/EU); fall back if invalid.
-            if let d = dateFrom(y: m[3], mo: m[2], d: m[1]) ?? dateFrom(y: m[3], mo: m[1], d: m[2]) {
-                return at9am(d)
-            }
-        }
-        let months = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"]
-        if let m = firstMatch(#"(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})"#, lower),
-           let mo = months.firstIndex(of: m[1]), let day = Int(m[2]) {
-            return monthDay(month: mo + 1, day: day).map(at9am)
-        }
-        if let m = firstMatch(#"(\d{1,2})(st|nd|rd|th)?\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*"#, lower),
-           let day = Int(m[1]), let mo = months.firstIndex(of: m[3]) {
-            return monthDay(month: mo + 1, day: day).map(at9am)
-        }
-        return nil
+    private static func has(_ re: NSRegularExpression, _ s: String) -> Bool {
+        return re.firstMatch(in: s, options: [],
+                             range: NSRange(location: 0, length: (s as NSString).length)) != nil
     }
 
     private static func firstMatch(_ pattern: String, _ text: String) -> [String]? {
@@ -125,29 +106,6 @@ enum Extractors {
         return groups
     }
 
-    private static func dateFrom(y: String, mo: String, d: String) -> Date? {
-        guard let yy = Int(y), let mm = Int(mo), let dd = Int(d),
-              (1...12).contains(mm), (1...31).contains(dd) else { return nil }
-        var comps = DateComponents()
-        comps.year = yy; comps.month = mm; comps.day = dd
-        return Calendar.current.date(from: comps)
-    }
-
-    /// Month+day with no year → the next occurrence of that date.
-    private static func monthDay(month: Int, day: Int) -> Date? {
-        guard (1...12).contains(month), (1...31).contains(day) else { return nil }
-        let cal = Calendar.current
-        let year = cal.component(.year, from: Date())
-        var comps = DateComponents()
-        comps.year = year; comps.month = month; comps.day = day
-        guard var date = cal.date(from: comps) else { return nil }
-        if date < cal.startOfDay(for: Date()) {
-            comps.year = year + 1
-            guard let next = cal.date(from: comps) else { return nil }
-            date = next
-        }
-        return date
-    }
 
     // MARK: - Watched-video detection
 

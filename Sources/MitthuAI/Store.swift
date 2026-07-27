@@ -120,6 +120,10 @@ final class Store {
         // Accumulated seconds actually spent watching — half now, half later
         // adds up on the same entry.
         db.exec("ALTER TABLE facts ADD COLUMN watch_secs REAL DEFAULT 0;")
+        // A date we're not fully sure of (ambiguous 12/09, or read by the
+        // on-device model) — shown as "check date" in Brain rather than
+        // quietly scheduling the wrong nudge.
+        db.exec("ALTER TABLE facts ADD COLUMN needs_review INTEGER DEFAULT 0;")
 
         // Watched entries are now one-per-video (keyed by URL, 24h window),
         // which the original UNIQUE(kind, title) forbids — an SPA portal keeps
@@ -137,10 +141,11 @@ final class Store {
                 kind TEXT, title TEXT, detail TEXT,
                 due_ts REAL, created_ts REAL,
                 source TEXT, status TEXT DEFAULT 'open',
-                done_ts REAL, note TEXT DEFAULT '', watch_secs REAL DEFAULT 0
+                done_ts REAL, note TEXT DEFAULT '', watch_secs REAL DEFAULT 0,
+                needs_review INTEGER DEFAULT 0
             );
-            INSERT INTO facts_new (id, kind, title, detail, due_ts, created_ts, source, status, done_ts, note, watch_secs)
-                SELECT id, kind, title, detail, due_ts, created_ts, source, status, done_ts, note, watch_secs FROM facts;
+            INSERT INTO facts_new (id, kind, title, detail, due_ts, created_ts, source, status, done_ts, note, watch_secs, needs_review)
+                SELECT id, kind, title, detail, due_ts, created_ts, source, status, done_ts, note, watch_secs, needs_review FROM facts;
             DROP TABLE facts;
             ALTER TABLE facts_new RENAME TO facts;
             PRAGMA foreign_keys=ON;
@@ -684,6 +689,60 @@ final class Store {
     /// Your own subtitle for an item — what the page title didn't tell you.
     func setFactNote(id: Int64, note: String) {
         db.run("UPDATE facts SET note = ? WHERE id = ?", [Store.cleanNote(note), id])
+    }
+
+    func setNeedsReview(id: Int64, _ flag: Bool) {
+        db.run("UPDATE facts SET needs_review = ? WHERE id = ?", [flag ? 1 : 0, id])
+    }
+
+    /// Correct an item's due date. Its one-off nudges (interval_idx -1) are
+    /// rebuilt around the new date, and the item stops asking to be checked —
+    /// the user just told us what the date is.
+    func setFactDue(id: Int64, dueTs: Double?) {
+        db.run("UPDATE facts SET due_ts = ?, needs_review = 0 WHERE id = ?", [dueTs, id])
+        db.run("UPDATE reminders SET status = 'cancelled' WHERE fact_id = ? AND status = 'pending' AND interval_idx = -1", [id])
+        guard let due = dueTs else { return }
+        let now = Date().timeIntervalSince1970
+        let dayBefore = due - 86400
+        if dayBefore > now { addReminder(factId: id, fireTs: dayBefore, intervalIdx: -1) }
+        if due > now { addReminder(factId: id, fireTs: due, intervalIdx: -1) }
+    }
+
+    /// One-time repair after the date parser was fixed. Extracted deadlines
+    /// keep their original sentence in `detail`, so the corrected parser can
+    /// re-read them: a different date is written back, and a line that no
+    /// longer yields a believable date (a stale mail whose year had been
+    /// rolled forward) has its nudges cancelled. Nothing is deleted — the item
+    /// stays visible, flagged, for the user to judge.
+    func reparseExtractedDates() {
+        guard setting("date_reparse_v2") != "1" else { return }
+        var fixed = 0, flagged = 0
+        for f in db.query("""
+            SELECT id, detail, due_ts FROM facts
+            WHERE status = 'open' AND kind IN ('deadline', 'bill')
+              AND detail IS NOT NULL AND detail != '' AND due_ts IS NOT NULL
+            """) {
+            let id = Int64(f.int("id"))
+            let line = f.str("detail")
+            let old = f.double("due_ts")
+            if let found = DateParse.dueDate(in: line) {
+                let resolved = DateParse.applyOrder(found, order: Config.shared.dateOrder)
+                // Same day? Nothing to do.
+                if abs(resolved.ts - old) > 3600 {
+                    setFactDue(id: id, dueTs: resolved.ts)
+                    setNeedsReview(id: id, true)
+                    fixed += 1
+                }
+            } else {
+                db.run("UPDATE reminders SET status = 'cancelled' WHERE fact_id = ? AND status = 'pending'", [id])
+                setNeedsReview(id: id, true)
+                flagged += 1
+            }
+        }
+        setSetting("date_reparse_v2", "1")
+        if fixed + flagged > 0 {
+            print("MitthuAI: re-read stored deadlines — \(fixed) corrected, \(flagged) flagged for review")
+        }
     }
 
     private static func cleanNote(_ note: String) -> String {

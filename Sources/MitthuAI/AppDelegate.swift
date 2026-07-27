@@ -32,6 +32,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         store = Store()
         Config.shared.load(from: store)
+        // Re-read deadlines captured before the date parser was fixed.
+        store.reparseExtractedDates()
 
         // Start with macOS from now on (opt-in happens on the first launch;
         // afterwards this just mirrors whatever the user chose).
