@@ -177,6 +177,19 @@ final class Api {
                 }
                 store.addRevisionLadder(factId: Int64(id))
                 return ("200 OK", ct, Api.json(["ok": true]), [:])
+            case "model_fix":
+                // Hand this one item to the on-device model to re-read.
+                guard let id = body["id"] as? Int else {
+                    return ("400 Bad Request", ct, Api.json(["error": "missing id"]), [:])
+                }
+                guard Config.shared.modelAssist, ModelAssist.isAvailable else {
+                    return ("200 OK", ct, Api.json(["ok": false, "error": "on-device model is off or unavailable: \(ModelAssist.status)"]), [:])
+                }
+                guard let line = store.factDetail(id: Int64(id)), !line.isEmpty else {
+                    return ("200 OK", ct, Api.json(["ok": false, "error": "no source text stored for this item"]), [:])
+                }
+                ModelAssist.refine(factId: Int64(id), line: line, store: store)
+                return ("200 OK", ct, Api.json(["ok": true, "queued": true]), [:])
             case "due":
                 // Correcting a date the extractor got wrong; null clears it.
                 guard let id = body["id"] as? Int else {

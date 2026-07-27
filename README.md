@@ -173,6 +173,29 @@ Three rules make it right for deadlines specifically:
   click. Settings → Deadlines & dates pins the order to day-first or
   month-first if you'd rather not rely on the region.
 
+A line only becomes a task if it is **specific enough to act on**: marketing
+urgency ("Shop now before it's too late", "sale ends") and clipped fragments
+("Expires today") are dropped, and at most six deadlines are taken from the
+screen per hour. A date said in words counts too, as long as something is being
+asked of you — *"[Last Chance] Join us tomorrow"* is `join` + `tomorrow`, so it
+lands in Brain with tomorrow's date.
+
+### Seeing what MitthuAI sees
+
+When a mail is missed or an odd deadline appears, capture the screen exactly as
+the app reads it:
+
+```bash
+swiftc -O Tools/CaptureTest.swift Sources/MitthuAI/DateParse.swift -o /tmp/capture
+/tmp/capture            # then switch to the window — it captures after 5s
+```
+
+It writes `~/Desktop/mitthuai-capture.txt`: every text line the accessibility
+tree exposes, the player/button labels, and for each line whether it looks like
+a deadline, what date was found and from which words, or why it was dropped.
+The verdicts come from the app's own parser — the tool links it rather than
+copying it.
+
 Settings also lists the recent date and video decisions with their reasons, so
 an odd deadline explains itself. Optionally, **Apple's on-device model** can be
 switched on to read lines the parser can't — only those lines, never ordinary

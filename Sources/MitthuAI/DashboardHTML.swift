@@ -709,6 +709,9 @@ function renderBrain() {
       const review = f.needs_review ? '<span class="pill" style="color:var(--danger)" title="MitthuAI was not certain of this date — check it against the source">check date</span>' : '';
       const dueBtn = (f.kind !== 'watched')
         ? '<button class="btn small ghost" title="Fix the date" onclick="editDue(' + f.id + ')">📅</button>' : '';
+      // Hand this one item to the on-device model to re-read its source line.
+      const fixBtn = (f.kind !== 'watched' && MODEL_READY)
+        ? '<button class="btn small ghost" title="Let the on-device model re-read this item" onclick="modelFix(' + f.id + ')">✨</button>' : '';
       const revBtn = f.kind === 'watched' ? '<button class="btn small ghost" onclick="factAction(' + f.id + ',\'revise\')">revise</button>' : '';
       // Second line: your own note plus when this was captured — between them
       // they answer "which video was this?" months later.
@@ -741,7 +744,7 @@ function renderBrain() {
         '<button class="btn small ghost" title="Add a note so you remember what this was" ' +
         'onclick="editNote(' + f.id + ')">✎ ' + (f.note ? 'edit note' : 'note') + '</button>';
       return '<div class="fact"><span class="pill ' + esc(f.kind) + '">' + esc(f.kind) + '</span>' +
-        '<span class="title">' + linkTitle(f.title, f.detail) + second + '</span>' + review + due + dueBtn + noteBtn + revBtn +
+        '<span class="title">' + linkTitle(f.title, f.detail) + second + '</span>' + review + due + dueBtn + fixBtn + noteBtn + revBtn +
         '<button class="btn small" onclick="factAction(' + f.id + ',\'complete\')">done</button>' +
         '<button class="btn small ghost" onclick="factAction(' + f.id + ',\'dismiss\')">✕</button></div>';
     }).join('');
@@ -755,6 +758,15 @@ function renderBrain() {
       (r.note ? '<span class="sub"><span class="note">' + esc(r.note) + '</span></span>' : '') + '</span>' +
       '<span class="due">next ' + fmtDate(r.fire_ts) + '</span></div>').join('');
   } else rem.innerHTML = '<div class="empty">no reminders scheduled</div>';
+}
+
+let MODEL_READY = false;   // set from /api/status; gates the ✨ button
+
+async function modelFix(id) {
+  const r = await api('/api/fact', {method:'POST', body: JSON.stringify({action:'model_fix', id:id})});
+  if (r && r.ok === false) { alert(r.error || 'could not run the on-device model'); return; }
+  // The model answers on its own schedule; give it a moment, then refresh.
+  setTimeout(loadBrain, 2500);
 }
 
 function editDue(id) {
@@ -1099,6 +1111,7 @@ async function loadSettings() {
   document.getElementById('set-dateorder').value = s.date_order || 'auto';
   document.getElementById('set-model').checked = !!s.model_assist;
   document.getElementById('model-status').textContent = s.model_status || '–';
+  MODEL_READY = !!s.model_assist && s.model_status === 'ready';
   document.getElementById('detection-log').textContent =
     (s.detection_log && s.detection_log.length) ? s.detection_log.slice().reverse().join('\n')
                                                 : 'nothing decided yet — play something for a minute';
@@ -1165,7 +1178,10 @@ function updateDot(paused) {
 
 loadToday();
 api('/api/rules').then(r => { if (r.categories && r.categories.length) CATEGORIES = r.categories; }).catch(()=>{});
-api('/api/status').then(s => updateDot(s.paused)).catch(()=>{});
+api('/api/status').then(s => {
+  updateDot(s.paused);
+  MODEL_READY = !!s.model_assist && s.model_status === 'ready';
+}).catch(()=>{});
 setInterval(() => { if (!document.getElementById('view-today').classList.contains('hidden')) loadToday(); }, 60000);
 </script>
 </body>

@@ -49,40 +49,67 @@ enum Extractors {
         pattern: #"[$₹€£]\s?\d[\d,]*(\.\d+)?|(\d[\d,]*(\.\d+)?\s?(USD|INR|EUR|Rs\.?))"#,
         options: [.caseInsensitive])
 
+    /// A promo-heavy inbox can otherwise turn one screen into a dozen tasks.
+    private static var extractedHourStart = Date().timeIntervalSince1970
+    private static var extractedThisHour = 0
+    private static let hourlyFactCap = 6
+
+    private static func withinRateCap() -> Bool {
+        let now = Date().timeIntervalSince1970
+        if now - extractedHourStart > 3600 { extractedHourStart = now; extractedThisHour = 0 }
+        guard extractedThisHour < hourlyFactCap else { return false }
+        extractedThisHour += 1
+        return true
+    }
+
     static func extractFacts(from text: String, source: String, store: Store) {
         let lines = text.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
         for (i, line) in lines.enumerated() {
             guard line.count > 8 && line.count < 400 else { continue }
-            let lower = line.lowercased()
-            guard DateParse.dueKeywords.contains(where: { lower.contains($0) }) else { continue }
+            // Either a deadline word, or a spoken date next to something you
+            // have to do — "Join us tomorrow" counts, and used to be dropped.
+            guard let reason = DateParse.candidateReason(in: line) else { continue }
+            // Marketing urgency and clipped fragments are not tasks.
+            if let why = DateParse.rejectionReason(in: line) {
+                logDecision("skipped \(why) — \(line.prefix(60))")
+                continue
+            }
 
             let kind = has(moneyRegex, line) ? "bill" : "deadline"
             let title = String(line.prefix(120))
-            // Mail and tables often split "Last date to apply:" from the date,
-            // so the following line counts as part of the same statement.
+            // Mail and tables split "Last date to apply:" from the date, so a
+            // short date-only next line counts as part of the same statement.
             let next = i + 1 < lines.count ? lines[i + 1] : nil
 
             guard let found = DateParse.dueDate(in: line, nextLine: next) else {
-                // Nothing believable here. If the user has switched the
-                // on-device model on, let it have a look — it is the only
-                // caller path, and its answer is verified against this text.
-                ModelAssist.dueDate(in: line) { ts in
-                    if let id = store.addFact(kind: kind, title: title, detail: line,
-                                              dueTs: ts, source: source) {
-                        store.setNeedsReview(id: id, true)
-                        logDecision("date via on-device model: \(DateParse.isoDay(Date(timeIntervalSince1970: ts))) — \(title.prefix(60))")
-                    }
+                // No date we can stand behind. When the user has switched the
+                // on-device model on, it gets this one line — small enough to
+                // be cheap, and its answer is checked against the text.
+                ModelAssist.judge(line: line) { verdict in
+                    guard withinRateCap(),
+                          let id = store.addFact(kind: kind, title: verdict.title, detail: line,
+                                                 dueTs: verdict.ts, source: source) else { return }
+                    store.setNeedsReview(id: id, true)
+                    logDecision("kept by on-device model: \(DateParse.isoDay(Date(timeIntervalSince1970: verdict.ts))) — \(verdict.title.prefix(60))")
                 }
                 continue
             }
 
             let resolved = DateParse.applyOrder(found, order: Config.shared.dateOrder)
+            guard withinRateCap() else {
+                logDecision("hourly limit reached, skipped — \(line.prefix(60))")
+                continue
+            }
             guard let id = store.addFact(kind: kind, title: title, detail: line,
                                          dueTs: resolved.ts, source: source) else { continue }
             if resolved.ambiguous { store.setNeedsReview(id: id, true) }
             logDecision("date \(DateParse.isoDay(Date(timeIntervalSince1970: resolved.ts))) "
-                        + "from \"\(resolved.matched)\" (\(resolved.via)"
+                        + "from \"\(resolved.matched)\" (\(reason), \(resolved.via)"
                         + (resolved.ambiguous ? ", ambiguous — check it" : "") + ") — \(title.prefix(60))")
+
+            // With the model on, let it tidy the title and sanity-check the
+            // date it just accepted — one short line, cheap.
+            ModelAssist.refine(factId: id, line: line, store: store)
         }
     }
 
