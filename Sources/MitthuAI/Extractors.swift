@@ -76,7 +76,7 @@ enum Extractors {
             }
 
             let kind = has(moneyRegex, line) ? "bill" : "deadline"
-            let title = String(line.prefix(120))
+            let title = String(cleanTitle(line).prefix(120))
             // Mail and tables split "Last date to apply:" from the date, so a
             // short date-only next line counts as part of the same statement.
             let next = i + 1 < lines.count ? lines[i + 1] : nil
@@ -96,6 +96,12 @@ enum Extractors {
             }
 
             let resolved = DateParse.applyOrder(found, order: Config.shared.dateOrder)
+            // The same mail lands on screen several times over — as a tab
+            // title, a subject line, a heading. One task is enough.
+            if let existing = store.similarOpenFact(kind: kind, title: title, dueTs: resolved.ts) {
+                logDecision("already have this one as \"\(existing.prefix(50))\" — \(title.prefix(50))")
+                continue
+            }
             guard withinRateCap() else {
                 logDecision("hourly limit reached, skipped — \(line.prefix(60))")
                 continue
@@ -116,6 +122,39 @@ enum Extractors {
     private static func has(_ re: NSRegularExpression, _ s: String) -> Bool {
         return re.firstMatch(in: s, options: [],
                              range: NSRange(location: 0, length: (s as NSString).length)) != nil
+    }
+
+    /// Window chrome trailing a title: "… - you@gmail.com - Gmail",
+    /// "… - YouTube", "… | Notion". Dropping it leaves the part a person would
+    /// recognise, and makes one mail — seen once as a tab title and once as a
+    /// subject line — look like the single thing it is.
+    private static let chromeWords: Set<String> = [
+        "gmail", "inbox", "mail", "outlook", "google mail", "proton mail",
+        "youtube", "notion", "slack", "google docs", "google drive", "docs",
+        "sheets", "calendar", "google calendar", "safari", "google chrome",
+        "chrome", "firefox", "linkedin", "twitter", "whatsapp"
+    ]
+
+    static func cleanTitle(_ raw: String, app: String = "") -> String {
+        var title = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        let separators = [" - ", " – ", " — ", " | ", " · "]
+        var stripped = true
+        while stripped {
+            stripped = false
+            for sep in separators {
+                guard let r = title.range(of: sep, options: .backwards),
+                      r.lowerBound > title.startIndex else { continue }
+                let tail = String(title[r.upperBound...]).trimmingCharacters(in: .whitespaces)
+                let key = tail.lowercased()
+                let isChrome = tail.contains("@") || chromeWords.contains(key)
+                    || (!app.isEmpty && key == app.lowercased())
+                guard isChrome, !tail.isEmpty else { continue }
+                title = String(title[..<r.lowerBound]).trimmingCharacters(in: .whitespaces)
+                stripped = true
+                break
+            }
+        }
+        return title.isEmpty ? raw : title
     }
 
     private static func firstMatch(_ pattern: String, _ text: String) -> [String]? {

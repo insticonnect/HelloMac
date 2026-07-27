@@ -17,15 +17,11 @@ and turns it into:
 > and data folder. Only the *GitHub repository* is still called `HelloMac`, so
 > the clone URL below keeps the old name.
 >
-> **Upgrading from a HelloMac build?** Your data moves itself. On first launch
-> MitthuAI copies `~/Library/Application Support/HelloMac/hellomac.db` to
-> `~/Library/Application Support/MitthuAI/mitthuai.db` (the old folder is left
-> in place as a backup) and carries your Keychain secrets over. Two manual
-> steps, because macOS sees a renamed bundle as a brand-new app:
-> 1. Re-grant **Accessibility** in System Settings → Privacy & Security, and
->    remove the stale `HelloMac` entry there.
-> 2. Delete the old `build/HelloMac.app` if you kept a copy, so you don't launch
->    both at once — two instances would fight over port 4789.
+> **Coming from an old HelloMac build?** This release starts fresh — it no
+> longer carries data over from `~/Library/Application Support/HelloMac/`.
+> Delete that folder and the old `build/HelloMac.app` (two instances would
+> fight over port 4789), then grant **Accessibility** to MitthuAI in System
+> Settings → Privacy & Security and remove the stale `HelloMac` entry there.
 
 ---
 
@@ -94,9 +90,9 @@ the running app is using.
 
 **Your data survives updates.** Everything lives in
 `~/Library/Application Support/MitthuAI/mitthuai.db`, which the build never
-touches — new columns and tables are migrated automatically on launch. Your
-access token, settings, and rules carry over too, so you don't need to
-reconnect Claude after an update.
+touches — your access token, settings, rules, and history all carry over, so
+you don't need to reconnect Claude after an update. (Coming from a pre-1.0
+build? Delete that folder first; this release expects a database it created.)
 
 ## Dashboard
 
@@ -179,22 +175,6 @@ urgency ("Shop now before it's too late", "sale ends") and clipped fragments
 screen per hour. A date said in words counts too, as long as something is being
 asked of you — *"[Last Chance] Join us tomorrow"* is `join` + `tomorrow`, so it
 lands in Brain with tomorrow's date.
-
-### Seeing what MitthuAI sees
-
-When a mail is missed or an odd deadline appears, capture the screen exactly as
-the app reads it:
-
-```bash
-swiftc -O Tools/CaptureTest.swift Sources/MitthuAI/DateParse.swift -o /tmp/capture
-/tmp/capture            # then switch to the window — it captures after 5s
-```
-
-It writes `~/Desktop/mitthuai-capture.txt`: every text line the accessibility
-tree exposes, the player/button labels, and for each line whether it looks like
-a deadline, what date was found and from which words, or why it was dropped.
-The verdicts come from the app's own parser — the tool links it rather than
-copying it.
 
 Settings also lists the recent date and video decisions with their reasons, so
 an odd deadline explains itself. Optionally, **Apple's on-device model** can be
