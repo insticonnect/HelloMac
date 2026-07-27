@@ -341,11 +341,24 @@ enum DashboardHTML {
     <p class="hint" id="openai-status" style="margin-top:6px">&nbsp;</p>
   </div>
   <div class="section">
+    <h2>Deadlines &amp; dates</h2>
+    <p class="hint" style="margin-bottom:10px">Dates are read with the same on-device parser macOS uses for “Add to Calendar”, anchored to the deadline word — so “Last date to Apply : Sep 12, 2026” lands on the 12th, not on a year digit. A date it isn’t sure about is marked <b>check date</b> in Brain, where 📅 fixes it.</p>
+    <div class="row" style="align-items:center">
+      <label class="hint">Numeric dates like 12/09/2026 mean:</label>
+      <select id="set-dateorder" onchange="saveSettings()" style="max-width:260px">
+        <option value="auto">Auto — follow this Mac’s region</option>
+        <option value="dmy">Day first — 12 September</option>
+        <option value="mdy">Month first — December 9</option>
+      </select>
+    </div>
+    <div class="toggle-row" style="margin-top:12px"><div><b>Let Apple’s on-device model read tricky dates</b><div class="hint">Only for deadline lines the parser can’t resolve on its own — never for ordinary capture. Everything it returns is checked against the text before it becomes a reminder, and nothing leaves this Mac. Status: <b id="model-status">–</b></div></div><input type="checkbox" id="set-model" onchange="saveSettings()"></div>
+  </div>
+  <div class="section">
     <h2>Video sources (always count as video)</h2>
     <p class="hint" style="margin-bottom:10px">MitthuAI spots a playing video on its own — the player's timecode and controls on screen, /watch-style links, the display staying awake — so most sites work with nothing listed here. Add a domain or keyword to force it anyway, e.g. your college portal. One per line.</p>
     <textarea id="set-video" rows="4" placeholder="learn.mycollege.edu"></textarea>
     <div class="row" style="margin-top:10px"><button class="btn" onclick="saveSettings()">Save</button></div>
-    <p class="hint" style="margin-top:14px;margin-bottom:6px"><b>Recent video detection</b> — every decision with its score and reasons, so a missed lecture explains itself:</p>
+    <p class="hint" style="margin-top:14px;margin-bottom:6px"><b>Recent detections (videos &amp; dates)</b> — every decision with its reasons, so a missed lecture or an odd deadline explains itself:</p>
     <div id="detection-log" class="hint" style="white-space:pre-wrap;font-family:ui-monospace,monospace;font-size:11px">–</div>
   </div>
   <div class="section">
@@ -677,6 +690,7 @@ async function doSearch() {
 
 let lastBrain = {facts: [], reminders: []};
 let editingNote = null;   // fact id whose note is being edited
+let editingDue = null;    // fact id whose due date is being corrected
 
 async function loadBrain() {
   lastBrain = await api('/api/brain');
@@ -690,11 +704,26 @@ function renderBrain() {
   if (b.facts.length) {
     facts.innerHTML = b.facts.map(f => {
       const due = f.due_ts ? '<span class="due' + (f.due_ts < now ? ' over' : '') + '">due ' + fmtDate(f.due_ts) + '</span>' : '';
+      // A date the extractor wasn't sure of — say so instead of quietly
+      // scheduling the wrong nudge.
+      const review = f.needs_review ? '<span class="pill" style="color:var(--danger)" title="MitthuAI was not certain of this date — check it against the source">check date</span>' : '';
+      const dueBtn = (f.kind !== 'watched')
+        ? '<button class="btn small ghost" title="Fix the date" onclick="editDue(' + f.id + ')">📅</button>' : '';
       const revBtn = f.kind === 'watched' ? '<button class="btn small ghost" onclick="factAction(' + f.id + ',\'revise\')">revise</button>' : '';
       // Second line: your own note plus when this was captured — between them
       // they answer "which video was this?" months later.
       let second;
-      if (editingNote === f.id) {
+      if (editingDue === f.id) {
+        const d = f.due_ts ? new Date(f.due_ts*1000) : new Date();
+        const pad = n => String(n).padStart(2,'0');
+        const dv = d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate());
+        const tv = pad(d.getHours()) + ':' + pad(d.getMinutes());
+        second = '<span class="noteedit">' +
+          '<input type="date" id="due-date-' + f.id + '" value="' + dv + '" style="max-width:160px">' +
+          '<input type="time" id="due-time-' + f.id + '" lang="en-US" value="' + tv + '" style="max-width:140px">' +
+          '<button class="btn small" onclick="saveDue(' + f.id + ')">Save date</button>' +
+          '<button class="btn small ghost" onclick="editingDue=null;renderBrain()">Cancel</button></span>';
+      } else if (editingNote === f.id) {
         second = '<span class="noteedit">' +
           '<input type="text" id="note-input-' + f.id + '" value="' + esc(f.note || '').replace(/"/g, '&quot;') + '" ' +
           'placeholder="e.g. Week 3 — Fourier series, phase shift part" ' +
@@ -712,7 +741,7 @@ function renderBrain() {
         '<button class="btn small ghost" title="Add a note so you remember what this was" ' +
         'onclick="editNote(' + f.id + ')">✎ ' + (f.note ? 'edit note' : 'note') + '</button>';
       return '<div class="fact"><span class="pill ' + esc(f.kind) + '">' + esc(f.kind) + '</span>' +
-        '<span class="title">' + linkTitle(f.title, f.detail) + second + '</span>' + due + noteBtn + revBtn +
+        '<span class="title">' + linkTitle(f.title, f.detail) + second + '</span>' + review + due + dueBtn + noteBtn + revBtn +
         '<button class="btn small" onclick="factAction(' + f.id + ',\'complete\')">done</button>' +
         '<button class="btn small ghost" onclick="factAction(' + f.id + ',\'dismiss\')">✕</button></div>';
     }).join('');
@@ -728,8 +757,23 @@ function renderBrain() {
   } else rem.innerHTML = '<div class="empty">no reminders scheduled</div>';
 }
 
+function editDue(id) {
+  editingDue = id; editingNote = null;
+  renderBrain();
+}
+
+async function saveDue(id) {
+  const d = document.getElementById('due-date-' + id).value;
+  const t = document.getElementById('due-time-' + id).value || '09:00';
+  const body = {action:'due', id:id};
+  if (d) body.due_ts = new Date(d + 'T' + t).getTime()/1000;
+  await api('/api/fact', {method:'POST', body: JSON.stringify(body)});
+  editingDue = null;
+  loadBrain();
+}
+
 function editNote(id) {
-  editingNote = id;
+  editingNote = id; editingDue = null;
   renderBrain();
   const el = document.getElementById('note-input-' + id);
   if (el) { el.focus(); el.select(); }
@@ -1052,6 +1096,9 @@ async function loadSettings() {
   document.getElementById('openai-status').textContent = s.openai_key_set ? 'A key is saved in Keychain.' : 'No key saved.';
   document.getElementById('set-excluded').value = s.excluded_apps.join('\n');
   document.getElementById('set-video').value = (s.video_sources || []).join('\n');
+  document.getElementById('set-dateorder').value = s.date_order || 'auto';
+  document.getElementById('set-model').checked = !!s.model_assist;
+  document.getElementById('model-status').textContent = s.model_status || '–';
   document.getElementById('detection-log').textContent =
     (s.detection_log && s.detection_log.length) ? s.detection_log.slice().reverse().join('\n')
                                                 : 'nothing decided yet — play something for a minute';
@@ -1078,7 +1125,9 @@ async function saveSettings() {
     launch_at_login: document.getElementById('set-login').checked,
     turbo_embeddings: document.getElementById('set-turbo').checked,
     excluded_apps: document.getElementById('set-excluded').value.split('\n').map(x => x.trim()).filter(Boolean),
-    video_sources: document.getElementById('set-video').value.split('\n').map(x => x.trim()).filter(Boolean)
+    video_sources: document.getElementById('set-video').value.split('\n').map(x => x.trim()).filter(Boolean),
+    date_order: document.getElementById('set-dateorder').value,
+    model_assist: document.getElementById('set-model').checked
   };
   // Only send the key when the user typed one (never auto-clear on toggles).
   const key = document.getElementById('set-openai').value.trim();

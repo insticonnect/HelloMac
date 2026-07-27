@@ -155,6 +155,31 @@ counts. Note that browser URLs come from Apple Events, which only Safari, Chrome
 Brave, Edge, Vivaldi and Arc support — in Firefox detection leans on the
 on-screen signals instead.
 
+### How a deadline gets read
+
+Dates come from **NSDataDetector** — the same on-device parser macOS uses for
+"Add to Calendar" in Mail — so "Sep 12, 2026", "12th Sept", "12/09/2026",
+"2026-09-12" and "next Friday" all work, in your Mac's own region format.
+Three rules make it right for deadlines specifically:
+
+- **Anchored to the deadline word.** In *"open for Sep 2026 term, Last date to
+  Apply : Sep 12, 2026"* the date nearest **after** "last date" wins — the 12th,
+  not the 20 hiding inside "2026".
+- **A written year is never second-guessed.** A mail about "January 2024" is
+  stale, so it produces nothing; only a date with *no* year at all may roll
+  forward to next year. Nothing more than two years out is accepted.
+- **Ambiguity is admitted, not guessed.** "12/09/2026" is read with your
+  region's order and marked **check date** in Brain, where 📅 fixes it in a
+  click. Settings → Deadlines & dates pins the order to day-first or
+  month-first if you'd rather not rely on the region.
+
+Settings also lists the recent date and video decisions with their reasons, so
+an odd deadline explains itself. Optionally, **Apple's on-device model** can be
+switched on to read lines the parser can't — only those lines, never ordinary
+capture, and every date it returns is checked against the source text (the day
+must actually appear there) before it becomes a reminder. It needs macOS 26
+with Apple Intelligence; Settings shows whether it's available.
+
 ### Categories & focus score
 
 Activity rolls up into four buckets — **Study, Entertainment, Work, Other** — chosen by your rules first, then a built-in heuristic. Study + Work count as *focus*; the focus-vs-multitasking score is focus time over total categorized time. You can type any custom category on a rule; the donut and chips adapt.

@@ -49,6 +49,8 @@ swiftc \
     Sources/MitthuAI/Tracker.swift \
     Sources/MitthuAI/ContentCapture.swift \
     Sources/MitthuAI/Extractors.swift \
+    Sources/MitthuAI/DateParse.swift \
+    Sources/MitthuAI/ModelAssist.swift \
     Sources/MitthuAI/ReminderScheduler.swift \
     Sources/MitthuAI/Digest.swift \
     Sources/MitthuAI/HttpServer.swift \

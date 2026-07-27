@@ -41,6 +41,9 @@ final class Api {
                 "excluded_apps": Config.shared.excludedApps.sorted(),
                 "video_sources": Config.shared.videoSources,
                 "detection_log": Extractors.detectionLog,
+                "date_order": Config.shared.dateOrder.rawValue,
+                "model_assist": Config.shared.modelAssist,
+                "model_status": ModelAssist.status,
                 "account_paired": AccountPairing.shared.isPaired,
                 "relay_enabled": Config.shared.relayEnabled,
                 "launch_at_login": LoginItem.isEnabled,
@@ -174,6 +177,14 @@ final class Api {
                 }
                 store.addRevisionLadder(factId: Int64(id))
                 return ("200 OK", ct, Api.json(["ok": true]), [:])
+            case "due":
+                // Correcting a date the extractor got wrong; null clears it.
+                guard let id = body["id"] as? Int else {
+                    return ("400 Bad Request", ct, Api.json(["error": "missing id"]), [:])
+                }
+                let due = (body["due_ts"] as? Double) ?? (body["due_ts"] as? Int).map { Double($0) }
+                store.setFactDue(id: Int64(id), dueTs: due)
+                return ("200 OK", ct, Api.json(["ok": true]), [:])
             case "note":
                 // Your own subtitle for the item — "" clears it.
                 guard let id = body["id"] as? Int else {
@@ -209,6 +220,10 @@ final class Api {
             if let v = body["video_sources"] as? [String] {
                 Config.shared.videoSources = v.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
             }
+            if let v = body["date_order"] as? String, let o = DateParse.Order(rawValue: v) {
+                Config.shared.dateOrder = o
+            }
+            if let v = body["model_assist"] as? Bool { Config.shared.modelAssist = v }
             // OpenAI key is sensitive → Keychain, never the DB. "" clears it.
             if let k = body["openai_api_key"] as? String {
                 Keychain.set("openai_api_key", k.trimmingCharacters(in: .whitespaces))
