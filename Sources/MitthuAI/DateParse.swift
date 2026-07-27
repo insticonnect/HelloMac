@@ -46,13 +46,25 @@ enum DateParse {
         "next friday", "next saturday", "next sunday"
     ]
 
-    /// Something the user would actually have to do.
+    /// Something the user would actually have to do. Matched on word stems
+    /// rather than raw substrings — "meet" has to catch "meeting" without
+    /// "book" catching "facebook" or "class" catching "classical".
     static let actionWords = [
-        "join", "register", "registration", "apply", "submit", "pay", "renew",
-        "expires", "closes", "ends", "starts", "begins", "deadline", "due",
-        "webinar", "meeting", "session", "interview", "exam", "class", "live",
-        "rsvp", "book", "confirm", "attend", "enroll", "last chance"
+        // meetings, in all the ways people write them
+        "meet", "call", "sync", "zoom", "webinar", "session", "standup",
+        "demo", "presentation", "appointment", "invite", "invitation",
+        "rsvp", "interview", "discussion",
+        // deadlines and admin
+        "join", "attend", "register", "registration", "apply", "submit",
+        "renew", "expire", "expiry", "pay", "payment", "bill", "deadline",
+        "due", "confirm", "schedule", "enroll", "start", "begin", "end",
+        "close", "live", "exam", "test", "quiz", "class", "lecture",
+        "assignment", "book"
     ]
+
+    /// Phrases, matched whole — no stemming needed.
+    static let actionPhrases = ["last chance", "catch up", "google meet",
+                                "microsoft teams", "one-on-one", "1:1"]
 
     /// Marketing copy dressed up as urgency. These lines are why Brain filled
     /// with "Shop now before it's too late".
@@ -76,10 +88,24 @@ enum DateParse {
         }
         let relative = relativeWords.first(where: { lower.contains($0) })
             ?? (has(inNDaysRegex, lower) ? "in N days" : nil)
-        if let rel = relative, let act = actionWords.first(where: { lower.contains($0) }) {
+        guard let rel = relative else { return nil }
+        if let act = actionPhrases.first(where: { lower.contains($0) }) {
+            return "\"\(rel)\" + \"\(act)\""
+        }
+        if let act = actionWords.first(where: { containsStem($0, in: lower) }) {
             return "\"\(rel)\" + \"\(act)\""
         }
         return nil
+    }
+
+    /// A word or its ordinary inflections, on word boundaries: "meet" finds
+    /// "meets" and "meeting", "book" finds "booked" but not "facebook".
+    static func containsStem(_ word: String, in text: String) -> Bool {
+        let pattern = #"\b"# + NSRegularExpression.escapedPattern(for: word) + #"(s|es|ed|ing)?\b"#
+        guard let re = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
+            return false
+        }
+        return has(re, text)
     }
 
     /// Why this line must NOT become a task, even though it mentions a date.
