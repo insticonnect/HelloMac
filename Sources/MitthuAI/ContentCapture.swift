@@ -93,10 +93,15 @@ final class ContentCapture {
                 store.insertEmbedding(chunkId: chunkId, vec: v, model: Embeddings.shared.modelId)
                 rememberVec(v, app: snap.appName)
             }
-            Extractors.extractFacts(from: chunkText,
-                                    source: "\(snap.appName): \(snap.windowTitle)",
-                                    store: store)
         }
+
+        // Facts are read from the whole screen, not per chunk: chunking exists
+        // for embeddings, and a deadline in one chunk needs the sender that may
+        // sit in another.
+        Extractors.extractFacts(from: text,
+                                source: "\(snap.appName): \(snap.windowTitle)",
+                                store: store,
+                                windowTitle: snap.windowTitle)
     }
 
     private func isNearDuplicate(_ vec: [Float], app: String) -> Bool {

@@ -615,25 +615,10 @@ final class Store {
             SELECT title FROM facts
             WHERE status = 'open' AND kind = ? AND due_ts >= ? AND due_ts < ?
             """, [kind, dayStart, dayStart + 86400])
-        let mine = Store.words(title)
-        guard !mine.isEmpty else { return nil }
-        for row in candidates {
-            let theirs = Store.words(row.str("title"))
-            guard !theirs.isEmpty else { continue }
-            if mine == theirs || mine.isSubset(of: theirs) || theirs.isSubset(of: mine) {
-                return row.str("title")
-            }
-            let overlap = Double(mine.intersection(theirs).count)
-            if overlap / Double(mine.union(theirs).count) >= 0.7 { return row.str("title") }
+        for row in candidates where Extractors.sameThing(title, row.str("title"), threshold: 0.7) {
+            return row.str("title")
         }
         return nil
-    }
-
-    private static func words(_ s: String) -> Set<String> {
-        return Set(s.lowercased()
-            .split(whereSeparator: { !$0.isLetter && !$0.isNumber })
-            .map(String.init)
-            .filter { $0.count > 1 })
     }
 
     func setFactTitle(id: Int64, title: String) {

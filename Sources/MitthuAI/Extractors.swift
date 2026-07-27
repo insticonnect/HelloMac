@@ -45,9 +45,69 @@ enum Extractors {
 
     // MARK: - Deadline / bill extraction from captured text
 
+    /// Amounts written either way round — "₹2,400", "Rs 2,400", "2400 INR".
     private static let moneyRegex = try! NSRegularExpression(
-        pattern: #"[$₹€£]\s?\d[\d,]*(\.\d+)?|(\d[\d,]*(\.\d+)?\s?(USD|INR|EUR|Rs\.?))"#,
+        pattern: #"[$₹€£]\s?\d[\d,]*(\.\d+)?|\b(Rs\.?|INR|USD|EUR)\s?\d[\d,]*(\.\d+)?|\b\d[\d,]*(\.\d+)?\s?(USD|INR|EUR|Rs\.?)\b"#,
         options: [.caseInsensitive])
+
+    /// Words too common to tell two items apart — including the date words,
+    /// since every candidate line has one by definition.
+    private static let stopWords: Set<String> = [
+        "the", "and", "for", "you", "your", "our", "with", "from", "this", "that",
+        "have", "has", "will", "are", "was", "not", "but", "can", "all", "any",
+        "out", "get", "now", "new", "let", "lets", "over", "about", "here", "there",
+        // times and prepositions — "tomorrow at 4 pm" says nothing about *what*
+        "today", "tomorrow", "tonight", "week", "weekend", "next", "monday",
+        "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
+        "at", "am", "pm", "on", "in", "to", "of", "is", "it", "by", "be", "do",
+        "up", "we", "us", "me", "my",
+        // mail furniture
+        "re", "fwd", "inbox", "mail", "gmail", "hi", "hii", "hey", "hello",
+        "dear", "thanks", "regards", "please", "via", "sent", "subject"
+    ]
+
+    static func contentWords(_ s: String) -> Set<String> {
+        return Set(s.lowercased()
+            .split(whereSeparator: { !$0.isLetter && !$0.isNumber })
+            .map(String.init)
+            .filter { $0.count > 1 && !stopWords.contains($0) })
+    }
+
+    /// Whether two lines describe the same thing. One mail states its business
+    /// in several wordings, so containment of the distinctive words counts
+    /// outright, and so does a shared run of words long enough to be a quoted
+    /// phrase rather than a coincidence — "lets meet tomorrow over meet" turning
+    /// up in both the subject and the body. Comparing word *sets* alone is not
+    /// enough: a subject and its own restatement can share as little as one
+    /// distinctive word, while "physics exam" and "chemistry exam" share one too.
+    static func sameThing(_ a: String, _ b: String, threshold: Double) -> Bool {
+        let x = contentWords(a), y = contentWords(b)
+        guard !x.isEmpty, !y.isEmpty else { return false }
+        if x == y || x.isSubset(of: y) || y.isSubset(of: x) { return true }
+        if Double(x.intersection(y).count) / Double(x.union(y).count) >= threshold { return true }
+        return sharesPhrase(a, b)
+    }
+
+    /// A run of four consecutive words in common, carrying at least one word
+    /// that isn't filler — "tomorrow at 4 pm" proves nothing, "lets meet
+    /// tomorrow over" does.
+    private static func sharesPhrase(_ a: String, _ b: String, minWords: Int = 4) -> Bool {
+        func grams(_ s: String) -> Set<String> {
+            let words = s.lowercased()
+                .split(whereSeparator: { !$0.isLetter && !$0.isNumber })
+                .map(String.init)
+            guard words.count >= minWords else { return [] }
+            var out = Set<String>()
+            for i in 0...(words.count - minWords) {
+                let run = Array(words[i..<(i + minWords)])
+                guard run.contains(where: { !stopWords.contains($0) && $0.count > 1 }) else { continue }
+                out.insert(run.joined(separator: " "))
+            }
+            return out
+        }
+        let ga = grams(a)
+        return !ga.isEmpty && !ga.isDisjoint(with: grams(b))
+    }
 
     /// A promo-heavy inbox can otherwise turn one screen into a dozen tasks.
     private static var extractedHourStart = Date().timeIntervalSince1970
@@ -62,8 +122,24 @@ enum Extractors {
         return true
     }
 
-    static func extractFacts(from text: String, source: String, store: Store) {
-        let lines = text.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
+    static func extractFacts(from text: String, source: String, store: Store,
+                             windowTitle: String = "") {
+        var lines = text.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
+        // For a mail client the window title *is* the subject — the highest
+        // signal line on screen, and it used to be skipped entirely.
+        let titleLine = windowTitle.trimmingCharacters(in: .whitespaces)
+        if !titleLine.isEmpty { lines.insert(titleLine, at: 0) }
+        let mail = mailContext(lines: lines, windowTitle: titleLine)
+
+        // One open mail states its business several times over — as the tab
+        // title, as a heading, and again in the body — and the wordings differ
+        // too much for text similarity alone to tie them together. So the
+        // screen is read first, and only the best line for each thing on it is
+        // kept: one item per kind per due day, the earliest line winning, which
+        // is the subject once the window title leads the list.
+        var chosen: [(line: String, kind: String, title: String,
+                      resolved: DateParse.Found, reason: String)] = []
+
         for (i, line) in lines.enumerated() {
             guard line.count > 8 && line.count < 400 else { continue }
             // Either a deadline word, or a spoken date next to something you
@@ -88,7 +164,8 @@ enum Extractors {
                 ModelAssist.judge(line: line) { verdict in
                     guard withinRateCap(),
                           let id = store.addFact(kind: kind, title: verdict.title, detail: line,
-                                                 dueTs: verdict.ts, source: source) else { return }
+                                                 dueTs: verdict.ts, source: source,
+                                                 note: mail.note) else { return }
                     store.setNeedsReview(id: id, true)
                     logDecision("kept by on-device model: \(DateParse.isoDay(Date(timeIntervalSince1970: verdict.ts))) — \(verdict.title.prefix(60))")
                 }
@@ -96,26 +173,45 @@ enum Extractors {
             }
 
             let resolved = DateParse.applyOrder(found, order: Config.shared.dateOrder)
-            // The same mail lands on screen several times over — as a tab
-            // title, a subject line, a heading. One task is enough.
-            if let existing = store.similarOpenFact(kind: kind, title: title, dueTs: resolved.ts) {
-                logDecision("already have this one as \"\(existing.prefix(50))\" — \(title.prefix(50))")
+            let day = DateParse.isoDay(Date(timeIntervalSince1970: resolved.ts))
+            // Being on one screen, of one kind and due the same day is strong
+            // evidence already, so a lighter word test settles it than the one
+            // used against items stored earlier.
+            if let dup = chosen.first(where: {
+                $0.kind == kind
+                    && DateParse.isoDay(Date(timeIntervalSince1970: $0.resolved.ts)) == day
+                    && sameThing($0.title, title, threshold: 0.35)
+            }) {
+                logDecision("same thing again on this screen as \"\(dup.title.prefix(40))\" — \(title.prefix(50))")
+                continue
+            }
+            chosen.append((line, kind, title, resolved, reason))
+        }
+
+        for c in chosen {
+            // And once more against what is already in Brain, so re-opening the
+            // mail tomorrow doesn't add it twice.
+            if let existing = store.similarOpenFact(kind: c.kind, title: c.title, dueTs: c.resolved.ts) {
+                logDecision("already have this one as \"\(existing.prefix(50))\" — \(c.title.prefix(50))")
                 continue
             }
             guard withinRateCap() else {
-                logDecision("hourly limit reached, skipped — \(line.prefix(60))")
+                logDecision("hourly limit reached, skipped — \(c.line.prefix(60))")
                 continue
             }
-            guard let id = store.addFact(kind: kind, title: title, detail: line,
-                                         dueTs: resolved.ts, source: source) else { continue }
-            if resolved.ambiguous { store.setNeedsReview(id: id, true) }
-            logDecision("date \(DateParse.isoDay(Date(timeIntervalSince1970: resolved.ts))) "
-                        + "from \"\(resolved.matched)\" (\(reason), \(resolved.via)"
-                        + (resolved.ambiguous ? ", ambiguous — check it" : "") + ") — \(title.prefix(60))")
+            // The note is written once, when the item is created, so a later
+            // capture of the same mail never overwrites what the user typed.
+            guard let id = store.addFact(kind: c.kind, title: c.title, detail: c.line,
+                                         dueTs: c.resolved.ts, source: source,
+                                         note: mail.note) else { continue }
+            if c.resolved.ambiguous { store.setNeedsReview(id: id, true) }
+            logDecision("date \(DateParse.isoDay(Date(timeIntervalSince1970: c.resolved.ts))) "
+                        + "from \"\(c.resolved.matched)\" (\(c.reason), \(c.resolved.via)"
+                        + (c.resolved.ambiguous ? ", ambiguous — check it" : "") + ") — \(c.title.prefix(60))")
 
             // With the model on, let it tidy the title and sanity-check the
             // date it just accepted — one short line, cheap.
-            ModelAssist.refine(factId: id, line: line, store: store)
+            ModelAssist.refine(factId: id, line: c.line, store: store)
         }
     }
 
@@ -134,6 +230,76 @@ enum Extractors {
         "sheets", "calendar", "google calendar", "safari", "google chrome",
         "chrome", "firefox", "linkedin", "twitter", "whatsapp"
     ]
+
+    private static let emailRegex = try! NSRegularExpression(
+        pattern: #"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"#)
+    private static let meetingLinkRegex = try! NSRegularExpression(
+        pattern: #"(meet\.google\.com/[a-z0-9-]+|zoom\.us/j/[0-9]+|teams\.microsoft\.com/l/meetup-join/\S+)"#,
+        options: [.caseInsensitive])
+
+    /// Who sent it and where the meeting is — the context that makes an item
+    /// recognisable weeks later, pulled from the same text we already captured.
+    struct MailContext {
+        var sender = ""     // "Name <address>", or just the address
+        var link = ""       // meet.google.com/… and friends
+
+        var note: String {
+            var parts: [String] = []
+            if !sender.isEmpty { parts.append("from \(sender)") }
+            if !link.isEmpty { parts.append(link) }
+            return parts.joined(separator: " · ")
+        }
+    }
+
+    static func mailContext(lines: [String], windowTitle: String) -> MailContext {
+        var ctx = MailContext()
+        // The address in the window title is the reader's own account
+        // ("… - you@gmail.com - Gmail"), so it is not the sender.
+        let account = firstEmail(in: windowTitle)?.lowercased() ?? ""
+
+        for (i, line) in lines.enumerated() {
+            if ctx.link.isEmpty, let l = firstMatch(meetingLinkRegex, in: line) { ctx.link = l }
+            guard ctx.sender.isEmpty, let email = firstEmail(in: line),
+                  email.lowercased() != account else { continue }
+            ctx.sender = email
+            // A display name usually sits right beside the address —
+            // "Amrit Kumar <amrit@…>", "From: Amrit Kumar", or the line above.
+            let ns = line as NSString
+            let before = ns.substring(to: ns.range(of: email).location)
+                .trimmingCharacters(in: CharacterSet(charactersIn: " <(\"'\t"))
+                .replacingOccurrences(of: "From:", with: "", options: .caseInsensitive)
+                .trimmingCharacters(in: .whitespaces)
+            if let name = plausibleName(before) {
+                ctx.sender = "\(name) <\(email)>"
+            } else if i > 0, let name = plausibleName(lines[i - 1]) {
+                ctx.sender = "\(name) <\(email)>"
+            }
+        }
+        return ctx
+    }
+
+    /// A person's name, not a sentence or a stray label.
+    private static func plausibleName(_ s: String) -> String? {
+        let t = s.trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: ":-–—"))
+            .trimmingCharacters(in: .whitespaces)
+        let words = t.split(separator: " ")
+        guard !t.isEmpty, t.count <= 60, words.count <= 5, !t.contains("@"),
+              t.rangeOfCharacter(from: CharacterSet(charactersIn: "0123456789")) == nil,
+              t.first?.isLetter == true else { return nil }
+        return t
+    }
+
+    private static func firstEmail(in s: String) -> String? {
+        return firstMatch(emailRegex, in: s)
+    }
+
+    private static func firstMatch(_ re: NSRegularExpression, in s: String) -> String? {
+        let ns = s as NSString
+        guard let m = re.firstMatch(in: s, options: [],
+                                    range: NSRange(location: 0, length: ns.length)) else { return nil }
+        return ns.substring(with: m.range)
+    }
 
     static func cleanTitle(_ raw: String, app: String = "") -> String {
         var title = raw.trimmingCharacters(in: .whitespacesAndNewlines)

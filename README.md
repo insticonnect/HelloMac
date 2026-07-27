@@ -173,8 +173,20 @@ A line only becomes a task if it is **specific enough to act on**: marketing
 urgency ("Shop now before it's too late", "sale ends") and clipped fragments
 ("Expires today") are dropped, and at most six deadlines are taken from the
 screen per hour. A date said in words counts too, as long as something is being
-asked of you — *"[Last Chance] Join us tomorrow"* is `join` + `tomorrow`, so it
-lands in Brain with tomorrow's date.
+asked of you — *"lets meet tomorrow over meet"* is `meet` + `tomorrow`, so it
+lands in Brain with tomorrow's date. Word stems are matched, so *meet* also
+finds *meets* and *meeting* without *book* matching *facebook*.
+
+**One mail, one item.** A message shows up on screen several times over — the
+tab title, a heading, the sentence in the body — so each screen contributes at
+most one item per kind per due day, chosen from the subject where there is one,
+and it is checked against Brain again before being added. Different things due
+the same day stay separate: two exams, a bill and a meeting, all survive.
+
+Mail items carry **who sent it** in the note — the sender's name and address
+(your own account address is never mistaken for the sender) plus a Google
+Meet/Zoom/Teams link when the mail has one, so the reminder tells you who and
+where. Your own edits to a note are never overwritten.
 
 Settings also lists the recent date and video decisions with their reasons, so
 an odd deadline explains itself. Optionally, **Apple's on-device model** can be
