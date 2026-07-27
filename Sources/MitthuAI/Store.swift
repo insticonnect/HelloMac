@@ -12,49 +12,9 @@ final class Store {
         let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         dataDir = appSupport.appendingPathComponent("MitthuAI")
         try? fm.createDirectory(at: dataDir, withIntermediateDirectories: true, attributes: nil)
-        Store.migrateLegacyDataIfNeeded(fm: fm, appSupport: appSupport, newDir: dataDir)
         db = SQLiteDB(path: dataDir.appendingPathComponent("mitthuai.db").path)
         migrate()
         ensureToken()
-    }
-
-    /// One-time migration from the pre-rebrand HelloMac location.
-    ///
-    ///   ~/Library/Application Support/HelloMac/hellomac.db
-    ///     → ~/Library/Application Support/MitthuAI/mitthuai.db
-    ///
-    /// Runs only when the new database does not exist yet and the old one does,
-    /// so it is a no-op on fresh installs and on every launch after the first.
-    /// The old files are COPIED, not moved, so the previous install stays intact
-    /// as a fallback if anything goes wrong.
-    private static func migrateLegacyDataIfNeeded(fm: FileManager, appSupport: URL, newDir: URL) {
-        let newDB = newDir.appendingPathComponent("mitthuai.db")
-        guard !fm.fileExists(atPath: newDB.path) else { return }
-
-        let legacyDir = appSupport.appendingPathComponent("HelloMac")
-        let legacyDB = legacyDir.appendingPathComponent("hellomac.db")
-        guard fm.fileExists(atPath: legacyDB.path) else { return }
-
-        // Copy the main database plus its write-ahead log sidecars, so an
-        // un-checkpointed WAL doesn't silently drop the most recent activity.
-        let pairs = [("hellomac.db", "mitthuai.db"),
-                     ("hellomac.db-wal", "mitthuai.db-wal"),
-                     ("hellomac.db-shm", "mitthuai.db-shm")]
-        var copied = 0
-        for (old, new) in pairs {
-            let src = legacyDir.appendingPathComponent(old)
-            guard fm.fileExists(atPath: src.path) else { continue }
-            do {
-                try fm.copyItem(at: src, to: newDir.appendingPathComponent(new))
-                copied += 1
-            } catch {
-                print("MitthuAI migration: failed copying \(old): \(error)")
-            }
-        }
-
-        if copied > 0 {
-            print("MitthuAI migration: imported your HelloMac data (\(copied) file(s)) from \(legacyDir.path). The old folder was left untouched as a backup.")
-        }
     }
 
     private func migrate() {
@@ -84,14 +44,19 @@ final class Store {
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             kind TEXT, title TEXT, detail TEXT,
             due_ts REAL, created_ts REAL,
-            source TEXT, status TEXT DEFAULT 'open'
+            source TEXT, status TEXT DEFAULT 'open',
+            done_ts REAL,                       -- when it was marked done
+            note TEXT DEFAULT '',               -- your own subtitle for it
+            watch_secs REAL DEFAULT 0,          -- time actually spent watching
+            needs_review INTEGER DEFAULT 0      -- a date we weren't sure of
         );
 
         CREATE TABLE IF NOT EXISTS reminders (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             fact_id INTEGER REFERENCES facts(id) ON DELETE CASCADE,
             fire_ts REAL, interval_idx INTEGER DEFAULT 0,
-            status TEXT DEFAULT 'pending'
+            status TEXT DEFAULT 'pending',
+            done_ts REAL                        -- when the revision was done
         );
         CREATE INDEX IF NOT EXISTS idx_reminders_fire ON reminders(fire_ts);
 
@@ -104,57 +69,6 @@ final class Store {
             category TEXT
         );
         """)
-
-        // Additive migration for DBs created before the `model` column existed.
-        // (ALTER errors harmlessly if the column already exists.)
-        db.exec("ALTER TABLE embeddings ADD COLUMN model TEXT DEFAULT '';")
-        // When a revision was actually completed (status 'done'), for history.
-        db.exec("ALTER TABLE reminders ADD COLUMN done_ts REAL;")
-        // When a fact was marked done — lets the History calendar place
-        // completed items (even ones without a due date) on the right day.
-        db.exec("ALTER TABLE facts ADD COLUMN done_ts REAL;")
-        // Your own subtitle for an item. Page titles ("… :: IITM Online
-        // Degree") rarely say which lecture it was; `detail` already holds the
-        // video URL, so the note needs its own column.
-        db.exec("ALTER TABLE facts ADD COLUMN note TEXT DEFAULT '';")
-        // Accumulated seconds actually spent watching — half now, half later
-        // adds up on the same entry.
-        db.exec("ALTER TABLE facts ADD COLUMN watch_secs REAL DEFAULT 0;")
-        // A date we're not fully sure of (ambiguous 12/09, or read by the
-        // on-device model) — shown as "check date" in Brain rather than
-        // quietly scheduling the wrong nudge.
-        db.exec("ALTER TABLE facts ADD COLUMN needs_review INTEGER DEFAULT 0;")
-
-        // Watched entries are now one-per-video (keyed by URL, 24h window),
-        // which the original UNIQUE(kind, title) forbids — an SPA portal keeps
-        // one title for every lecture. SQLite can't drop a constraint, so DBs
-        // created with it get the facts table rebuilt once, ids preserved.
-        // foreign_keys goes OFF first: with it ON, DROP TABLE implies a DELETE
-        // that would cascade into reminders.
-        let factsSQL = db.query("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'facts'")
-            .first?.str("sql") ?? ""
-        if factsSQL.contains("UNIQUE") {
-            db.exec("""
-            PRAGMA foreign_keys=OFF;
-            CREATE TABLE facts_new (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                kind TEXT, title TEXT, detail TEXT,
-                due_ts REAL, created_ts REAL,
-                source TEXT, status TEXT DEFAULT 'open',
-                done_ts REAL, note TEXT DEFAULT '', watch_secs REAL DEFAULT 0,
-                needs_review INTEGER DEFAULT 0
-            );
-            INSERT INTO facts_new (id, kind, title, detail, due_ts, created_ts, source, status, done_ts, note, watch_secs, needs_review)
-                SELECT id, kind, title, detail, due_ts, created_ts, source, status, done_ts, note, watch_secs, needs_review FROM facts;
-            DROP TABLE facts;
-            ALTER TABLE facts_new RENAME TO facts;
-            PRAGMA foreign_keys=ON;
-            """)
-            print("MitthuAI: migrated the facts table — watched items are now unique per video, not per title")
-        }
-        // Prior builds only ever used the Apple backend, so tag legacy vectors
-        // accordingly to keep them visible to semantic search.
-        db.exec("UPDATE embeddings SET model = 'apple-nl-en' WHERE model = '' OR model IS NULL;")
 
         db.exec("""
         CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(text, content='chunks', content_rowid='id');
@@ -691,6 +605,37 @@ final class Store {
         db.run("UPDATE facts SET note = ? WHERE id = ?", [Store.cleanNote(note), id])
     }
 
+    /// An open item of the same kind, due the same day, that is really the same
+    /// thing said differently. One mail reaches the screen as a tab title, a
+    /// subject line and a heading; without this each becomes its own task.
+    func similarOpenFact(kind: String, title: String, dueTs: Double) -> String? {
+        let cal = Calendar.current
+        let dayStart = cal.startOfDay(for: Date(timeIntervalSince1970: dueTs)).timeIntervalSince1970
+        let candidates = db.query("""
+            SELECT title FROM facts
+            WHERE status = 'open' AND kind = ? AND due_ts >= ? AND due_ts < ?
+            """, [kind, dayStart, dayStart + 86400])
+        let mine = Store.words(title)
+        guard !mine.isEmpty else { return nil }
+        for row in candidates {
+            let theirs = Store.words(row.str("title"))
+            guard !theirs.isEmpty else { continue }
+            if mine == theirs || mine.isSubset(of: theirs) || theirs.isSubset(of: mine) {
+                return row.str("title")
+            }
+            let overlap = Double(mine.intersection(theirs).count)
+            if overlap / Double(mine.union(theirs).count) >= 0.7 { return row.str("title") }
+        }
+        return nil
+    }
+
+    private static func words(_ s: String) -> Set<String> {
+        return Set(s.lowercased()
+            .split(whereSeparator: { !$0.isLetter && !$0.isNumber })
+            .map(String.init)
+            .filter { $0.count > 1 })
+    }
+
     func setFactTitle(id: Int64, title: String) {
         let t = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !t.isEmpty else { return }
@@ -724,62 +669,10 @@ final class Store {
     /// re-read them: a different date is written back, and a line that no
     /// longer yields a believable date (a stale mail whose year had been
     /// rolled forward) has its nudges cancelled. Nothing is deleted — the item
-    /// stays visible, flagged, for the user to judge.
-    func reparseExtractedDates() {
-        guard setting("date_reparse_v2") != "1" else { return }
-        var fixed = 0, flagged = 0
-        for f in db.query("""
-            SELECT id, detail, due_ts FROM facts
-            WHERE status = 'open' AND kind IN ('deadline', 'bill')
-              AND detail IS NOT NULL AND detail != '' AND due_ts IS NOT NULL
-            """) {
-            let id = Int64(f.int("id"))
-            let line = f.str("detail")
-            let old = f.double("due_ts")
-            if let found = DateParse.dueDate(in: line) {
-                let resolved = DateParse.applyOrder(found, order: Config.shared.dateOrder)
-                // Same day? Nothing to do.
-                if abs(resolved.ts - old) > 3600 {
-                    setFactDue(id: id, dueTs: resolved.ts)
-                    setNeedsReview(id: id, true)
-                    fixed += 1
-                }
-            } else {
-                db.run("UPDATE reminders SET status = 'cancelled' WHERE fact_id = ? AND status = 'pending'", [id])
-                setNeedsReview(id: id, true)
-                flagged += 1
-            }
-        }
-        setSetting("date_reparse_v2", "1")
-        if fixed + flagged > 0 {
-            print("MitthuAI: re-read stored deadlines — \(fixed) corrected, \(flagged) flagged for review")
-        }
-    }
 
     /// Clear out items the old, looser extractor created: marketing urgency
     /// ("Shop now before it's too late"), clipped fragments, and anything whose
     /// source line turns out to hold no date at all. Dismissed rather than
-    /// deleted — they stay recoverable, they just stop nagging.
-    func dropJunkExtractedFacts() {
-        guard setting("junk_cleanup_v3") != "1" else { return }
-        var dropped = 0
-        for f in db.query("""
-            SELECT id, detail, title FROM facts
-            WHERE status = 'open' AND kind IN ('deadline', 'bill') AND source != 'dashboard'
-            """) {
-            let id = Int64(f.int("id"))
-            let line = f.str("detail").isEmpty ? f.str("title") : f.str("detail")
-            let junk = DateParse.rejectionReason(in: line) != nil
-                || DateParse.candidateReason(in: line) == nil
-                || DateParse.dueDate(in: line) == nil
-            guard junk else { continue }
-            db.run("UPDATE facts SET status = 'dismissed' WHERE id = ?", [id])
-            db.run("UPDATE reminders SET status = 'cancelled' WHERE fact_id = ? AND status = 'pending'", [id])
-            dropped += 1
-        }
-        setSetting("junk_cleanup_v3", "1")
-        if dropped > 0 { print("MitthuAI: cleared \(dropped) junk deadline(s) the old extractor had created") }
-    }
 
     private static func cleanNote(_ note: String) -> String {
         return String(note.trimmingCharacters(in: .whitespacesAndNewlines).prefix(300))

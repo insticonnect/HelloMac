@@ -26,16 +26,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             print("MitthuAI: waiting for Accessibility permission — grant it in System Settings → Privacy & Security → Accessibility, then relaunch if capture stays empty.")
         }
 
-        // Carry over secrets saved under the old HelloMac bundle (no-op after
-        // the first launch, and on fresh installs).
-        Keychain.migrateLegacyIfNeeded()
-
         store = Store()
         Config.shared.load(from: store)
-        // Re-read deadlines captured before the date parser was fixed, then
-        // clear the junk the older, looser extractor had created.
-        store.reparseExtractedDates()
-        store.dropJunkExtractedFacts()
 
         // Start with macOS from now on (opt-in happens on the first launch;
         // afterwards this just mirrors whatever the user chose).
